@@ -1,8 +1,10 @@
 # HELM-BERT
 
-Hugging Face Transformers compatible peptide language model using HELM notation.
+A peptide language model using **HELM (Hierarchical Editing Language for Macromolecules)** notation, compatible with Hugging Face Transformers.
 
-## Model Architecture
+[![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Flansma%2Fhelm--bert-blue)](https://huggingface.co/Flansma/helm-bert)
+
+## Model Description
 
 HELM-BERT is built upon the DeBERTa architecture, designed for peptide sequences in HELM notation:
 
@@ -10,6 +12,8 @@ HELM-BERT is built upon the DeBERTa architecture, designed for peptide sequences
 - **Enhanced Mask Decoder (EMD)**: Injects absolute position embeddings at the decoder stage
 - **Span Masking**: Contiguous token masking with geometric distribution
 - **nGiE**: n-gram Induced Encoding layer (1D convolution, kernel size 3)
+
+## Model Specifications
 
 | Parameter | Value |
 |-----------|-------|
@@ -27,7 +31,7 @@ uv venv --python 3.11 && source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
 
-## Usage
+## How to Use
 
 ```python
 from transformers import AutoModel, AutoTokenizer
@@ -38,6 +42,7 @@ tokenizer = AutoTokenizer.from_pretrained("Flansma/helm-bert", trust_remote_code
 # Cyclosporine A
 inputs = tokenizer("PEPTIDE1{[Abu].[Sar].[meL].V.[meL].A.[dA].[meL].[meL].[meV].[Me_Bmt(E)]}$PEPTIDE1,PEPTIDE1,1:R1-11:R2$$$", return_tensors="pt")
 outputs = model(**inputs)
+embeddings = outputs.last_hidden_state
 ```
 
 ## Training
