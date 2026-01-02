@@ -1,0 +1,30 @@
+# PyTorch builds with CUDA 12.8 support
+torch
+torchaudio
+torchvision
+
+# Core dependencies
+lightning>=2.0.0
+transformers>=4.3.0
+tokenizers>=0.13.0
+omegaconf>=2.3.0
+wandb>=0.15.0
+accelerate
+
+# ML/Data libraries
+scikit-learn>=1.6.0
+pandas>=2.2.0
+numpy
+scipy
+matplotlib>=3.9.0
+seaborn
+statsmodels
+rdkit>=2023.9.1
+
+# Utilities
+pyyaml
+requests
+pydantic
+rich
+tqdm
+cryptography
