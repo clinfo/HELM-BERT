@@ -1,0 +1,53 @@
+# =============================================================================
+# HELM-BERT Permeability Regression Configuration
+# =============================================================================
+# Inherits common settings from default.yaml.
+# Contains ALL permeability-specific settings.
+#
+# Usage:
+#   python scripts/train_permeability.py
+#   python scripts/train_permeability.py model.freeze_encoder=true
+
+# =============================================================================
+# Paths
+# =============================================================================
+paths:
+  output_dir: ./outputs/permeability
+  results_dir: ./results/permeability
+
+# =============================================================================
+# Model
+# =============================================================================
+model:
+  freeze_encoder: false
+  encoder_attribute_name: helmbert  # Attribute name to access encoder in the model
+
+  # Classifier head
+  classifier:
+    num_layers: 2
+    dropout: 0.1
+
+# =============================================================================
+# Training
+# =============================================================================
+training:
+  max_epochs: 200
+  batch_size: 32
+  encoder_lr: 3.0e-5
+  head_lr: 1.0e-4
+
+# =============================================================================
+# Data
+# =============================================================================
+data:
+  train_file: ./data/downstream/cycpeptmpdb_permeability_train.csv
+  test_file: ./data/downstream/cycpeptmpdb_permeability_test.csv
+  helm_column: HELM
+  target_column: Permeability
+  val_ratio: 0.1
+
+# =============================================================================
+# Logging
+# =============================================================================
+logging:
+  wandb_project: helmbert-permeability

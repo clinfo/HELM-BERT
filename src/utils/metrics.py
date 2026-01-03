@@ -57,7 +57,7 @@ def compute_regression_metrics(
         try:
             corr, _ = pearsonr(preds_np, labels_np)
             metrics["pearson"] = float(corr)
-        except Exception as e:
+        except (ValueError, RuntimeWarning) as e:
             logger.error(f"Pearson correlation failed: {e}")
             metrics["pearson"] = float("nan")
     else:
@@ -67,7 +67,10 @@ def compute_regression_metrics(
 
 
 def compute_classification_metrics(
-    predictions: torch.Tensor, labels: torch.Tensor, num_classes: int
+    predictions: torch.Tensor,
+    labels: torch.Tensor,
+    num_classes: int,
+    threshold: float = 0.5,
 ) -> Dict[str, float]:
     """Compute classification metrics (Accuracy, F1, Precision, Recall, ROC-AUC).
 
@@ -75,6 +78,7 @@ def compute_classification_metrics(
         predictions: Model logits [N, num_classes] or [N] for binary
         labels: Ground truth labels [N]
         num_classes: Number of classes (1 for binary, >1 for multi-class)
+        threshold: Classification threshold for binary classification
 
     Returns:
         Dictionary with accuracy, f1, precision, recall, roc_auc, pr_auc
@@ -86,7 +90,7 @@ def compute_classification_metrics(
     if num_classes == 1:
         # Binary classification with single output
         probs = torch.sigmoid(predictions).numpy().squeeze()
-        preds = (probs > 0.5).astype(int)
+        preds = (probs > threshold).astype(int)
     else:
         # Multi-class classification
         probs = F.softmax(predictions, dim=1).numpy()
@@ -118,7 +122,7 @@ def compute_classification_metrics(
                     roc_auc_score(labels, probs, multi_class="ovr")
                 )
                 metrics["pr_auc"] = float("nan")  # PR-AUC not defined for multi-class
-        except Exception as e:
+        except ValueError as e:
             logger.error(f"Failed to compute AUC: {e}")
             metrics["roc_auc"] = float("nan")
             metrics["pr_auc"] = float("nan")

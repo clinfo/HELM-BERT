@@ -26,32 +26,42 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PPIDataConfig:
-    """Configuration for PPI DataModule."""
+    """Configuration for PPI DataModule.
+
+    All fields are required - values come from YAML configuration.
+    """
 
     # Data files
-    train_file: str = "./data/propedia_ppi_train.csv"
-    test_file: str = "./data/propedia_ppi_test.csv"
+    train_file: str
+    test_file: str
 
     # Column names
-    drug_column: str = "Drug"
-    target_column: str = "Target"
-    label_column: str = "Y"
+    drug_column: str
+    target_column: str
+    label_column: str
 
     # Target encoder (ESM-2)
-    target_encoder: str = "facebook/esm2_t33_650M_UR50D"
+    target_encoder: str
 
     # Data loading
-    val_ratio: float = 0.1
-    batch_size: int = 32
-    max_drug_length: int = 512
-    max_target_length: int = 1024
-    num_workers: int = 8
-    pin_memory: bool = True
-    seed: int = 42
+    val_ratio: float
+    batch_size: int
+    max_drug_length: int
+    max_target_length: int
+    num_workers: int
+    pin_memory: bool
+    seed: int
 
     # Cached embeddings
-    use_cached_embeddings: bool = False
-    cache_dir: str = "./data/embeddings"
+    use_cached_embeddings: bool
+    cache_dir: str
+
+    # Cache naming (for EmbeddingCache lookup)
+    cache_drug_encoder_name: str
+    cache_target_encoder_name: str
+    cache_dataset_type: str
+    cache_drug_role: str
+    cache_target_role: str
 
 
 class PPIDataModule(L.LightningDataModule):
@@ -61,26 +71,19 @@ class PPIDataModule(L.LightningDataModule):
     Data is split into train/val/test with stratified splitting for classification.
 
     Args:
-        config: PPIDataConfig with data loading settings
+        config: PPIDataConfig with data loading settings (required)
         drug_tokenizer: PreTrainedTokenizer for drug sequences (required)
         target_tokenizer: Optional ESM tokenizer for target sequences
-
-    Example:
-        >>> from transformers import AutoTokenizer
-        >>> config = PPIDataConfig()
-        >>> drug_tokenizer = AutoTokenizer.from_pretrained("Flansma/helm-bert", trust_remote_code=True)
-        >>> datamodule = PPIDataModule(config, drug_tokenizer)
-        >>> datamodule.setup()
     """
 
     def __init__(
         self,
-        config: Optional[PPIDataConfig] = None,
-        drug_tokenizer: Optional[PreTrainedTokenizer] = None,
+        config: PPIDataConfig,
+        drug_tokenizer: PreTrainedTokenizer,
         target_tokenizer: Optional[Any] = None,
     ):
         super().__init__()
-        self.config = config or PPIDataConfig()
+        self.config = config
 
         # Tokenizers (lazy initialization if not provided)
         self._drug_tokenizer = drug_tokenizer
@@ -101,10 +104,6 @@ class PPIDataModule(L.LightningDataModule):
     @property
     def drug_tokenizer(self) -> PreTrainedTokenizer:
         """Get drug tokenizer."""
-        if self._drug_tokenizer is None:
-            raise ValueError(
-                "drug_tokenizer is required. Use AutoTokenizer.from_pretrained('Flansma/helm-bert', trust_remote_code=True)"
-            )
         return self._drug_tokenizer
 
     @property
@@ -159,23 +158,23 @@ class PPIDataModule(L.LightningDataModule):
 
         embedding_cache = EmbeddingCache(cache_dir)
 
-        # Load drug embeddings (HELM-BERT)
-        logger.info("Loading drug embeddings (HELM-BERT)...")
+        # Load drug embeddings
+        logger.info(f"Loading drug embeddings ({self.config.cache_drug_encoder_name})...")
         self.drug_embeddings = embedding_cache.load_embeddings(
-            encoder_name="helmbert",
-            dataset_type="ppi",
+            encoder_name=self.config.cache_drug_encoder_name,
+            dataset_type=self.config.cache_dataset_type,
             sequences=list(all_drugs),
-            role="drugs",
+            role=self.config.cache_drug_role,
         )
         logger.info(f"Loaded {len(self.drug_embeddings)} drug embeddings")
 
-        # Load target embeddings (ESM-2)
-        logger.info("Loading target embeddings (ESM-2)...")
+        # Load target embeddings
+        logger.info(f"Loading target embeddings ({self.config.cache_target_encoder_name})...")
         self.target_embeddings = embedding_cache.load_embeddings(
-            encoder_name="esm2",
-            dataset_type="ppi",
+            encoder_name=self.config.cache_target_encoder_name,
+            dataset_type=self.config.cache_dataset_type,
             sequences=list(all_targets),
-            role="targets",
+            role=self.config.cache_target_role,
         )
         logger.info(f"Loaded {len(self.target_embeddings)} target embeddings")
 
@@ -256,8 +255,8 @@ class PPIDataModule(L.LightningDataModule):
                 sequences_a=drug_seqs,
                 sequences_b=target_seqs,
                 labels=labels,
-                name_a="drug",
-                name_b="target",
+                name_a=self.config.cache_drug_role,
+                name_b=self.config.cache_target_role,
                 embeddings_a=self.drug_embeddings,
                 embeddings_b=self.target_embeddings,
             )
@@ -270,8 +269,8 @@ class PPIDataModule(L.LightningDataModule):
                 tokenizer_b=self.target_tokenizer,
                 max_length_a=self.config.max_drug_length,
                 max_length_b=self.config.max_target_length,
-                name_a="drug",
-                name_b="target",
+                name_a=self.config.cache_drug_role,
+                name_b=self.config.cache_target_role,
                 embeddings_a=self.drug_embeddings,
                 embeddings_b=self.target_embeddings,
             )

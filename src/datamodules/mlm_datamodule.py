@@ -1,7 +1,7 @@
 """MLM DataModule for HELM sequences."""
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -28,59 +28,46 @@ class DatasetInfo:
 
 @dataclass
 class MLMDataConfig:
-    """Configuration for MLM DataModule."""
+    """Configuration for MLM DataModule.
 
-    data_dir: str = "./data/deduplicated"
-    datasets: List[DatasetInfo] = field(
-        default_factory=lambda: [
-            DatasetInfo("chembl", "chembl_deduplicated.csv", "helm_notation"),
-            DatasetInfo("cycpeptmpdb", "cycpeptmpdb_deduplicated.csv", "HELM"),
-            DatasetInfo("propedia", "propedia_deduplicated.csv", "Peptide_HELM"),
-        ]
-    )
-    train_ratio: float = 0.9
-    batch_size: int = 64
-    max_seq_length: int = 512
-    num_workers: int = 8
-    pin_memory: bool = True
-    seed: int = 42
+    All fields are required - values come from YAML configuration.
+    """
+
+    data_dir: str
+    datasets: List[DatasetInfo]
+    train_ratio: float
+    batch_size: int
+    max_seq_length: int
+    num_workers: int
+    pin_memory: bool
+    seed: int
     # Span masking config
-    mlm_probability: float = 0.15
-    mask_ratio: float = 0.8
-    random_ratio: float = 0.1
-    keep_ratio: float = 0.1
-    min_span_length: int = 1
-    max_span_length: int = 5
-    geometric_p: float = 0.2
+    mlm_probability: float
+    mask_ratio: float
+    random_ratio: float
+    keep_ratio: float
+    min_span_length: int
+    max_span_length: int
+    geometric_p: float
+    ignore_index: int
 
 
 class MLMDataModule(L.LightningDataModule):
     """DataModule for HELM Masked Language Modeling.
 
     Args:
-        config: MLMDataConfig for data loading settings
+        config: MLMDataConfig for data loading settings (required)
         tokenizer: PreTrainedTokenizer instance (required)
-
-    Example:
-        >>> from transformers import AutoTokenizer
-        >>> config = MLMDataConfig(batch_size=32)
-        >>> tokenizer = AutoTokenizer.from_pretrained("Flansma/helm-bert", trust_remote_code=True)
-        >>> datamodule = MLMDataModule(config, tokenizer)
-        >>> datamodule.setup()
     """
 
     def __init__(
         self,
-        config: Optional[MLMDataConfig] = None,
-        tokenizer: Optional[PreTrainedTokenizer] = None,
+        config: MLMDataConfig,
+        tokenizer: PreTrainedTokenizer,
     ):
         super().__init__()
 
-        self.config = config or MLMDataConfig()
-        if tokenizer is None:
-            raise ValueError(
-                "tokenizer is required. Use AutoTokenizer.from_pretrained('Flansma/helm-bert', trust_remote_code=True)"
-            )
+        self.config = config
         self.tokenizer = tokenizer
 
         # Initialize span masking
@@ -92,11 +79,16 @@ class MLMDataModule(L.LightningDataModule):
             min_span_length=self.config.min_span_length,
             max_span_length=self.config.max_span_length,
             geometric_p=self.config.geometric_p,
+            ignore_index=self.config.ignore_index,
         )
+        # Get special token IDs from tokenizer (never masked)
+        special_token_ids = set(self.tokenizer.all_special_ids)
+
         self.masking_strategy = SpanMasking(
             config=masking_config,
             mask_token_id=self.tokenizer.mask_token_id,
             vocab_size=self.tokenizer.vocab_size,
+            special_token_ids=special_token_ids,
         )
 
         # Data containers
