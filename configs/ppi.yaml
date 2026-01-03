@@ -71,14 +71,24 @@ esm_hidden_sizes:
   facebook/esm2_t48_15B_UR50D: 5120
 
 # =============================================================================
+# Batch Key Names
+# =============================================================================
+batch_keys:
+  drug_ids: drug_ids
+  drug_mask: drug_mask
+  target_ids: target_ids
+  target_mask: target_mask
+  drug_embedding: drug_embedding
+  target_embedding: target_embedding
+  label: label
+
+# =============================================================================
 # Embedding Cache
 # =============================================================================
 cache:
   drug_encoder_name: helmbert
   target_encoder_name: esm2
   dataset_type: ppi
-  drug_role: drugs
-  target_role: targets
 
 # =============================================================================
 # Classification Settings

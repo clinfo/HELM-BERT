@@ -1,6 +1,7 @@
-"""General-purpose dataset for dual-sequence tasks (e.g., drug-target, peptide-protein)."""
+"""Dataset for dual-sequence tasks (e.g., drug-target, peptide-protein)."""
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 import torch
 from torch.utils.data import Dataset
 
@@ -8,82 +9,53 @@ from torch.utils.data import Dataset
 class DualSequenceDataset(Dataset):
     """Dataset for tasks involving two sequences.
 
-    Supports various dual-sequence scenarios:
-    - Peptide-Protein Interaction (HELM + ESM)
-    - Drug-Target Interaction (SMILES + ESM)
-    - Peptide-Peptide Interaction (HELM + HELM)
-    - Any other sequence pair combination
+    Returns tokenized sequences without padding.
+    DataCollatorForPPI handles padding at batch level.
 
-    Example:
-        # For PPI task
-        dataset = DualSequenceDataset(
-            sequences_a=peptide_sequences,
-            sequences_b=protein_sequences,
-            labels=interaction_labels,
-            tokenizer_a=helm_tokenizer,
-            tokenizer_b=esm_tokenizer,
-            max_length_a=512,
-            max_length_b=1024,
-            name_a='drug',
-            name_b='target'
-        )
+    Uses fixed key names: drug_ids, drug_mask, target_ids, target_mask.
+
+    Args:
+        sequences_a: First sequences (drug/peptide HELM)
+        sequences_b: Second sequences (target/protein)
+        labels: Task labels (required)
+        tokenizer_a: Tokenizer for drug sequences
+        tokenizer_b: Tokenizer for target sequences
+        max_length_a: Max length for drug sequences (required, from YAML)
+        max_length_b: Max length for target sequences (required, from YAML)
+        embeddings_a: Pre-computed drug embeddings (optional)
+        embeddings_b: Pre-computed target embeddings (optional)
     """
 
     def __init__(
         self,
         sequences_a: List[str],
         sequences_b: List[str],
-        labels: Optional[List[Any]] = None,
-        weights: Optional[List[float]] = None,
-        tokenizer_a: Any = None,
-        tokenizer_b: Any = None,
-        max_length_a: int = 512,
-        max_length_b: int = 512,
-        name_a: str = "sequence_a",
-        name_b: str = "sequence_b",
+        labels: List[float],
+        tokenizer_a: Any,
+        tokenizer_b: Any,
+        max_length_a: int,
+        max_length_b: int,
         embeddings_a: Optional[Dict[str, torch.Tensor]] = None,
         embeddings_b: Optional[Dict[str, torch.Tensor]] = None,
     ):
-        """Initialize dual sequence dataset.
-
-        Args:
-            sequences_a: First sequences (e.g., drug/peptide HELM)
-            sequences_b: Second sequences (e.g., target/protein)
-            labels: Task labels (classification or regression)
-            weights: Sample weights for loss calculation (default: None)
-            tokenizer_a: Tokenizer for first sequences
-            tokenizer_b: Tokenizer for second sequences
-            max_length_a: Max length for first sequences
-            max_length_b: Max length for second sequences
-            name_a: Field name for first sequences (default: 'sequence_a')
-            name_b: Field name for second sequences (default: 'sequence_b')
-            embeddings_a: Pre-computed embeddings for sequences_a
-            embeddings_b: Pre-computed embeddings for sequences_b
-        """
-        assert len(sequences_a) == len(sequences_b), (
-            f"Sequence lists must have same length: {len(sequences_a)} vs {len(sequences_b)}"
-        )
-
-        if labels is not None:
-            assert len(labels) == len(sequences_a), (
-                f"Labels length must match sequences: {len(labels)} vs {len(sequences_a)}"
+        if len(sequences_a) != len(sequences_b):
+            raise ValueError(
+                f"Sequence lists must have same length: "
+                f"{len(sequences_a)} vs {len(sequences_b)}"
             )
-
-        if weights is not None:
-            assert len(weights) == len(sequences_a), (
-                f"Weights length must match sequences: {len(weights)} vs {len(sequences_a)}"
+        if len(labels) != len(sequences_a):
+            raise ValueError(
+                f"Labels length must match sequences: "
+                f"{len(labels)} vs {len(sequences_a)}"
             )
 
         self.sequences_a = sequences_a
         self.sequences_b = sequences_b
         self.labels = labels
-        self.weights = weights
         self.tokenizer_a = tokenizer_a
         self.tokenizer_b = tokenizer_b
         self.max_length_a = max_length_a
         self.max_length_b = max_length_b
-        self.name_a = name_a
-        self.name_b = name_b
         self.embeddings_a = embeddings_a
         self.embeddings_b = embeddings_b
 
@@ -91,73 +63,56 @@ class DualSequenceDataset(Dataset):
         return len(self.sequences_a)
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """Get a single sample.
+        """Get tokenized sequences and label.
 
         Returns:
-            Dictionary with tokenized sequences and optional label:
             {
-                f'{name_a}_ids': input_ids for sequence A,
-                f'{name_a}_mask': attention_mask for sequence A,
-                f'{name_b}_ids': input_ids for sequence B,
-                f'{name_b}_mask': attention_mask for sequence B,
-                f'{name_a}_embedding': pre-computed embedding for sequence A (if available),
-                f'{name_b}_embedding': pre-computed embedding for sequence B (if available),
-                'label': label (if provided),
-                'weight': sample weight (if provided),
-                f'{name_a}_sequence': original sequence A,
-                f'{name_b}_sequence': original sequence B
+                "drug_ids": List[int],
+                "drug_mask": List[int],
+                "target_ids": List[int],
+                "target_mask": List[int],
+                "label": float,
+                "drug_embedding": Tensor (if available),
+                "target_embedding": Tensor (if available),
             }
         """
         seq_a = self.sequences_a[idx]
         seq_b = self.sequences_b[idx]
 
-        # Tokenize sequence A
+        # Tokenize drug sequence
         encoding_a = self.tokenizer_a(
             seq_a,
-            padding="max_length",
             truncation=True,
             max_length=self.max_length_a,
             return_tensors=None,
         )
 
-        # Tokenize sequence B
+        # Tokenize target sequence
         encoding_b = self.tokenizer_b(
             seq_b,
-            padding="max_length",
             truncation=True,
             max_length=self.max_length_b,
             return_tensors=None,
         )
 
-        # Build sample dictionary
-        sample = {
-            f"{self.name_a}_ids": torch.tensor(encoding_a["input_ids"]),
-            f"{self.name_a}_mask": torch.tensor(encoding_a["attention_mask"]),
-            f"{self.name_b}_ids": torch.tensor(encoding_b["input_ids"]),
-            f"{self.name_b}_mask": torch.tensor(encoding_b["attention_mask"]),
-            f"{self.name_a}_sequence": seq_a,
-            f"{self.name_b}_sequence": seq_b,
+        # Build sample with fixed key names
+        sample: Dict[str, Any] = {
+            "drug_ids": encoding_a["input_ids"],
+            "drug_mask": encoding_a["attention_mask"],
+            "target_ids": encoding_b["input_ids"],
+            "target_mask": encoding_b["attention_mask"],
+            "label": float(self.labels[idx]),
         }
 
-        # Add pre-computed embeddings if available
-        if self.embeddings_a is not None and seq_a in self.embeddings_a:
-            sample[f"{self.name_a}_embedding"] = self.embeddings_a[seq_a]
+        # Add pre-computed embeddings if available (fail fast if missing)
+        if self.embeddings_a is not None:
+            if seq_a not in self.embeddings_a:
+                raise KeyError(f"Missing drug embedding for: {seq_a[:50]}...")
+            sample["drug_embedding"] = self.embeddings_a[seq_a]
 
-        if self.embeddings_b is not None and seq_b in self.embeddings_b:
-            sample[f"{self.name_b}_embedding"] = self.embeddings_b[seq_b]
-
-        # Add label if available
-        if self.labels is not None:
-            label = self.labels[idx]
-            # Handle both classification (int) and regression (float)
-            if isinstance(label, (int, float)):
-                sample["label"] = label
-            else:
-                # For multi-label or other complex labels
-                sample["label"] = torch.tensor(label)
-
-        # Add weight if available
-        if self.weights is not None:
-            sample["weight"] = self.weights[idx]
+        if self.embeddings_b is not None:
+            if seq_b not in self.embeddings_b:
+                raise KeyError(f"Missing target embedding for: {seq_b[:50]}...")
+            sample["target_embedding"] = self.embeddings_b[seq_b]
 
         return sample

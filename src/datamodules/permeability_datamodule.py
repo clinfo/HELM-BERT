@@ -1,4 +1,4 @@
-"""Permeability DataModule with train/test files and runtime train/val split."""
+"""Permeability DataModule with DataCollator for dynamic padding."""
 
 import logging
 from dataclasses import dataclass
@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from transformers import PreTrainedTokenizer
 
+from .data_collators import DataCollatorForRegression
 from .datasets import HELMDataset
 
 logger = logging.getLogger(__name__)
@@ -38,9 +39,11 @@ class PermeabilityDataConfig:
 class PermeabilityDataModule(L.LightningDataModule):
     """DataModule for permeability regression.
 
+    Uses DataCollator for dynamic padding at batch level.
+
     Args:
-        config: PermeabilityDataConfig for data loading settings (required)
-        tokenizer: PreTrainedTokenizer instance (required)
+        config: PermeabilityDataConfig for data loading settings
+        tokenizer: PreTrainedTokenizer instance
     """
 
     def __init__(
@@ -59,6 +62,9 @@ class PermeabilityDataModule(L.LightningDataModule):
 
         # Statistics
         self.data_stats: Dict[str, Any] = {}
+
+        # DataCollator
+        self._collate_fn = DataCollatorForRegression(tokenizer=self.tokenizer)
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load data and split train into train/val."""
@@ -136,6 +142,7 @@ class PermeabilityDataModule(L.LightningDataModule):
             num_workers=self.config.num_workers,
             pin_memory=self.config.pin_memory,
             persistent_workers=self.config.num_workers > 0,
+            collate_fn=self._collate_fn,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -146,6 +153,7 @@ class PermeabilityDataModule(L.LightningDataModule):
             num_workers=self.config.num_workers,
             pin_memory=self.config.pin_memory,
             persistent_workers=self.config.num_workers > 0,
+            collate_fn=self._collate_fn,
         )
 
     def test_dataloader(self) -> Optional[DataLoader]:
@@ -158,4 +166,5 @@ class PermeabilityDataModule(L.LightningDataModule):
             num_workers=self.config.num_workers,
             pin_memory=self.config.pin_memory,
             persistent_workers=self.config.num_workers > 0,
+            collate_fn=self._collate_fn,
         )

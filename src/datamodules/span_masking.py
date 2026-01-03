@@ -62,52 +62,53 @@ class SpanMasking:
         maskable_ids = set(range(vocab_size)) - self.special_tokens
         self.maskable_tokens_for_random = np.array(list(maskable_ids))
 
-    def _sample_span_lengths(self, num_spans: int) -> List[int]:
-        """Sample span lengths from geometric distribution."""
-        lengths = []
-        for _ in range(num_spans):
-            length = np.random.geometric(self.geometric_p)
-            length = max(self.min_span_length, min(length, self.max_span_length))
-            lengths.append(length)
-        return lengths
+    def _sample_span_lengths(self, num_spans: int) -> np.ndarray:
+        """Sample span lengths from geometric distribution (vectorized)."""
+        lengths = np.random.geometric(self.geometric_p, size=num_spans)
+        return np.clip(lengths, self.min_span_length, self.max_span_length)
 
     def _get_valid_span_starts(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor
-    ) -> List[int]:
-        """Get positions where spans can start."""
-        valid_starts = []
-        seq_len = len(input_ids)
+    ) -> np.ndarray:
+        """Get positions where spans can start (vectorized)."""
+        # Convert to numpy for vectorized operations
+        ids_np = input_ids.numpy()
+        mask_np = attention_mask.numpy()
 
-        for i in range(seq_len):
-            if attention_mask[i] == 0 or input_ids[i].item() in self.special_tokens:
-                continue
-            valid_starts.append(i)
+        # Build special tokens mask (vectorized)
+        special_mask = np.isin(ids_np, list(self.special_tokens))
 
-        return valid_starts
+        # Valid positions: attention=1 AND not special token
+        valid_mask = (mask_np == 1) & ~special_mask
+
+        return np.where(valid_mask)[0]
 
     def _select_spans(
-        self, valid_starts: List[int], span_lengths: List[int], seq_len: int
+        self, valid_starts: np.ndarray, span_lengths: np.ndarray, seq_len: int
     ) -> List[Tuple[int, int]]:
-        """Select non-overlapping spans."""
+        """Select non-overlapping spans.
+
+        Note: This is inherently sequential due to non-overlap constraint.
+        """
         spans = []
-        masked_positions = set()
+        masked_positions = np.zeros(seq_len, dtype=bool)
         valid_starts_shuffled = valid_starts.copy()
         np.random.shuffle(valid_starts_shuffled)
 
         span_idx = 0
         for start_pos in valid_starts_shuffled:
-            if start_pos in masked_positions or span_idx >= len(span_lengths):
+            if masked_positions[start_pos] or span_idx >= len(span_lengths):
                 continue
 
-            span_length = span_lengths[span_idx]
+            span_length = int(span_lengths[span_idx])
             end_pos = min(start_pos + span_length, seq_len)
 
-            if any(pos in masked_positions for pos in range(start_pos, end_pos)):
+            # Check overlap using slice (faster than any())
+            if masked_positions[start_pos:end_pos].any():
                 continue
 
             spans.append((start_pos, end_pos))
-            for pos in range(start_pos, end_pos):
-                masked_positions.add(pos)
+            masked_positions[start_pos:end_pos] = True
             span_idx += 1
 
         return spans
@@ -115,28 +116,26 @@ class SpanMasking:
     def _apply_span_masking(
         self, input_ids: torch.Tensor, spans: List[Tuple[int, int]]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Apply 80/10/10 masking rule to selected spans."""
+        """Apply 80/10/10 masking rule to selected spans (slice-optimized)."""
         labels = torch.full_like(input_ids, self.ignore_index)
         masked_input_ids = input_ids.clone()
 
         for start, end in spans:
-            rand = np.random.random()
+            # Copy original tokens to labels (slice assignment)
+            labels[start:end] = input_ids[start:end]
 
+            rand = np.random.random()
             if rand < self.mask_token_prob:
                 # 80%: Replace with [MASK]
-                for pos in range(start, end):
-                    labels[pos] = input_ids[pos]
-                    masked_input_ids[pos] = self.mask_token_id
+                masked_input_ids[start:end] = self.mask_token_id
             elif rand < self.mask_token_prob + self.random_token_prob:
-                # 10%: Replace with random tokens
-                for pos in range(start, end):
-                    labels[pos] = input_ids[pos]
-                    random_token = np.random.choice(self.maskable_tokens_for_random)
-                    masked_input_ids[pos] = random_token
-            else:
-                # 10%: Keep original
-                for pos in range(start, end):
-                    labels[pos] = input_ids[pos]
+                # 10%: Replace with random tokens (vectorized)
+                span_len = end - start
+                random_tokens = np.random.choice(
+                    self.maskable_tokens_for_random, size=span_len
+                )
+                masked_input_ids[start:end] = torch.from_numpy(random_tokens)
+            # 10%: Keep original (no action needed)
 
         return masked_input_ids, labels
 
@@ -169,7 +168,7 @@ class SpanMasking:
         for i in range(batch_size):
             valid_starts = self._get_valid_span_starts(input_ids[i], attention_mask[i])
 
-            if not valid_starts:
+            if len(valid_starts) == 0:
                 all_masked_input_ids.append(input_ids[i])
                 all_labels.append(torch.full_like(input_ids[i], self.ignore_index))
                 continue

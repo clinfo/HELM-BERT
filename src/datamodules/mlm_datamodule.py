@@ -1,4 +1,4 @@
-"""MLM DataModule for HELM sequences."""
+"""MLM DataModule for HELM sequences with DataCollator."""
 
 import logging
 from dataclasses import dataclass
@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from transformers import PreTrainedTokenizer
 
+from .data_collators import DataCollatorForMLM
 from .datasets import MLMDataset
 from .span_masking import SpanMasking, SpanMaskingConfig
 
@@ -55,9 +56,11 @@ class MLMDataConfig:
 class MLMDataModule(L.LightningDataModule):
     """DataModule for HELM Masked Language Modeling.
 
+    Uses DataCollator for dynamic padding and masking at batch level.
+
     Args:
-        config: MLMDataConfig for data loading settings (required)
-        tokenizer: PreTrainedTokenizer instance (required)
+        config: MLMDataConfig for data loading settings
+        tokenizer: PreTrainedTokenizer instance
     """
 
     def __init__(
@@ -70,7 +73,7 @@ class MLMDataModule(L.LightningDataModule):
         self.config = config
         self.tokenizer = tokenizer
 
-        # Initialize span masking
+        # Initialize span masking strategy
         masking_config = SpanMaskingConfig(
             mlm_probability=self.config.mlm_probability,
             mask_ratio=self.config.mask_ratio,
@@ -81,7 +84,6 @@ class MLMDataModule(L.LightningDataModule):
             geometric_p=self.config.geometric_p,
             ignore_index=self.config.ignore_index,
         )
-        # Get special token IDs from tokenizer (never masked)
         special_token_ids = set(self.tokenizer.all_special_ids)
 
         self.masking_strategy = SpanMasking(
@@ -89,6 +91,12 @@ class MLMDataModule(L.LightningDataModule):
             mask_token_id=self.tokenizer.mask_token_id,
             vocab_size=self.tokenizer.vocab_size,
             special_token_ids=special_token_ids,
+        )
+
+        # DataCollator for dynamic padding and masking
+        self._collate_fn = DataCollatorForMLM(
+            tokenizer=self.tokenizer,
+            masking_strategy=self.masking_strategy,
         )
 
         # Data containers
@@ -113,8 +121,7 @@ class MLMDataModule(L.LightningDataModule):
                 helm_column = dataset_info.helm_column
 
                 if not file_path.exists():
-                    logger.warning(f"Dataset not found: {file_path}")
-                    continue
+                    raise FileNotFoundError(f"Dataset not found: {file_path}")
 
                 df = pd.read_csv(file_path)
                 df = df.dropna(subset=[helm_column])
@@ -140,25 +147,23 @@ class MLMDataModule(L.LightningDataModule):
                 random_state=self.config.seed,
             )
 
-            # Create datasets
+            # Create datasets (no masking here - collator handles it)
             self.train_dataset = MLMDataset(
                 sequences=train_sequences,
                 tokenizer=self.tokenizer,
                 max_length=self.config.max_seq_length,
-                masking_strategy=self.masking_strategy,
             )
 
             self.val_dataset = MLMDataset(
                 sequences=val_sequences,
                 tokenizer=self.tokenizer,
                 max_length=self.config.max_seq_length,
-                masking_strategy=self.masking_strategy,
             )
 
             logger.info(f"Train: {len(train_sequences)}, Val: {len(val_sequences)}")
 
     def train_dataloader(self) -> DataLoader:
-        """Create training dataloader."""
+        """Create training dataloader with collate_fn."""
         return DataLoader(
             self.train_dataset,
             batch_size=self.config.batch_size,
@@ -166,10 +171,11 @@ class MLMDataModule(L.LightningDataModule):
             num_workers=self.config.num_workers,
             pin_memory=self.config.pin_memory,
             persistent_workers=self.config.num_workers > 0,
+            collate_fn=self._collate_fn,
         )
 
     def val_dataloader(self) -> DataLoader:
-        """Create validation dataloader."""
+        """Create validation dataloader with collate_fn."""
         return DataLoader(
             self.val_dataset,
             batch_size=self.config.batch_size,
@@ -177,4 +183,5 @@ class MLMDataModule(L.LightningDataModule):
             num_workers=self.config.num_workers,
             pin_memory=self.config.pin_memory,
             persistent_workers=self.config.num_workers > 0,
+            collate_fn=self._collate_fn,
         )

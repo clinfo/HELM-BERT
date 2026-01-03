@@ -1,6 +1,7 @@
 """PPI DataModule for peptide-protein interaction tasks.
 
 Supports dual-encoder setup with HELM-BERT for peptides and ESM-2 for proteins.
+Uses DataCollator for dynamic padding at batch level.
 """
 
 import logging
@@ -18,6 +19,7 @@ from transformers import AutoTokenizer, PreTrainedTokenizer
 
 from src.utils.embedding_cache import EmbeddingCache
 
+from .data_collators import DataCollatorForPPI, DataCollatorForPPIEmbedding
 from .dual_sequence_dataset import DualSequenceDataset
 from .embedding_only_dataset import EmbeddingOnlyDataset
 
@@ -60,19 +62,17 @@ class PPIDataConfig:
     cache_drug_encoder_name: str
     cache_target_encoder_name: str
     cache_dataset_type: str
-    cache_drug_role: str
-    cache_target_role: str
 
 
 class PPIDataModule(L.LightningDataModule):
     """DataModule for peptide-protein interaction prediction.
 
-    Supports dual-encoder setup with HELM-BERT for peptides and ESM-2 for proteins.
-    Data is split into train/val/test with stratified splitting for classification.
+    Uses DataCollator for dynamic padding at batch level.
+    Batch keys are fixed: drug_ids, drug_mask, target_ids, target_mask.
 
     Args:
-        config: PPIDataConfig with data loading settings (required)
-        drug_tokenizer: PreTrainedTokenizer for drug sequences (required)
+        config: PPIDataConfig with data loading settings
+        drug_tokenizer: PreTrainedTokenizer for drug sequences
         target_tokenizer: Optional ESM tokenizer for target sequences
     """
 
@@ -85,7 +85,7 @@ class PPIDataModule(L.LightningDataModule):
         super().__init__()
         self.config = config
 
-        # Tokenizers (lazy initialization if not provided)
+        # Tokenizers
         self._drug_tokenizer = drug_tokenizer
         self._target_tokenizer = target_tokenizer
 
@@ -100,6 +100,9 @@ class PPIDataModule(L.LightningDataModule):
         # Pre-computed embeddings
         self.drug_embeddings: Optional[Dict[str, torch.Tensor]] = None
         self.target_embeddings: Optional[Dict[str, torch.Tensor]] = None
+
+        # DataCollator (initialized in setup)
+        self._collate_fn: Optional[Any] = None
 
     @property
     def drug_tokenizer(self) -> PreTrainedTokenizer:
@@ -120,7 +123,7 @@ class PPIDataModule(L.LightningDataModule):
         return self.config.use_cached_embeddings
 
     def _use_embeddings_only(self) -> bool:
-        """Check if we can use embedding-only mode (no real-time encoding)."""
+        """Check if we can use embedding-only mode."""
         return (
             self._use_cached_embeddings()
             and self.drug_embeddings is not None
@@ -130,21 +133,17 @@ class PPIDataModule(L.LightningDataModule):
     def _load_embeddings(
         self, train_df: pd.DataFrame, test_df: Optional[pd.DataFrame]
     ) -> None:
-        """Load pre-computed embeddings if use_cached_embeddings is enabled.
-
-        Args:
-            train_df: Training dataframe
-            test_df: Test dataframe (optional)
-        """
+        """Load pre-computed embeddings if enabled."""
         if not self._use_cached_embeddings():
             logger.info("Cached embeddings disabled (use_cached_embeddings=false)")
             return
 
         cache_dir = Path(self.config.cache_dir)
         if not cache_dir.exists():
-            logger.warning(f"Cache directory not found: {cache_dir}")
-            logger.warning("Run generate_ppi_embeddings.py first")
-            return
+            raise FileNotFoundError(
+                f"Cache directory not found: {cache_dir}. "
+                "Run generate_ppi_embeddings.py first."
+            )
 
         # Get all unique sequences
         drug_col = self.config.drug_column
@@ -164,7 +163,7 @@ class PPIDataModule(L.LightningDataModule):
             encoder_name=self.config.cache_drug_encoder_name,
             dataset_type=self.config.cache_dataset_type,
             sequences=list(all_drugs),
-            role=self.config.cache_drug_role,
+            role="drug",
         )
         logger.info(f"Loaded {len(self.drug_embeddings)} drug embeddings")
 
@@ -174,16 +173,12 @@ class PPIDataModule(L.LightningDataModule):
             encoder_name=self.config.cache_target_encoder_name,
             dataset_type=self.config.cache_dataset_type,
             sequences=list(all_targets),
-            role=self.config.cache_target_role,
+            role="target",
         )
         logger.info(f"Loaded {len(self.target_embeddings)} target embeddings")
 
     def setup(self, stage: Optional[str] = None) -> None:
-        """Load and split data.
-
-        Train file is split into train/val using val_ratio with stratification.
-        Test file is loaded separately.
-        """
+        """Load and split data."""
         if self.train_dataset is not None:
             return  # Already setup
 
@@ -199,7 +194,7 @@ class PPIDataModule(L.LightningDataModule):
         full_train_df = pd.read_csv(train_file)
         logger.info(f"Loaded train: {len(full_train_df)} samples from {train_file}")
 
-        # Split train → train/val (stratified for classification)
+        # Split train → train/val (stratified)
         train_df, val_df = train_test_split(
             full_train_df,
             test_size=self.config.val_ratio,
@@ -221,6 +216,15 @@ class PPIDataModule(L.LightningDataModule):
 
         # Load embeddings if configured
         self._load_embeddings(full_train_df, test_df)
+
+        # Initialize DataCollator
+        if self._use_embeddings_only():
+            self._collate_fn = DataCollatorForPPIEmbedding()
+        else:
+            self._collate_fn = DataCollatorForPPI(
+                drug_tokenizer=self.drug_tokenizer,
+                target_tokenizer=self.target_tokenizer,
+            )
 
         # Create datasets
         self.train_dataset = self._create_dataset(
@@ -248,15 +252,13 @@ class PPIDataModule(L.LightningDataModule):
         """Create dataset from dataframe."""
         drug_seqs = df[drug_col].tolist()
         target_seqs = df[target_col].tolist()
-        labels = df[label_col].astype(int).tolist()
+        labels = [float(x) for x in df[label_col].tolist()]
 
         if self._use_embeddings_only():
             return EmbeddingOnlyDataset(
                 sequences_a=drug_seqs,
                 sequences_b=target_seqs,
                 labels=labels,
-                name_a=self.config.cache_drug_role,
-                name_b=self.config.cache_target_role,
                 embeddings_a=self.drug_embeddings,
                 embeddings_b=self.target_embeddings,
             )
@@ -269,8 +271,6 @@ class PPIDataModule(L.LightningDataModule):
                 tokenizer_b=self.target_tokenizer,
                 max_length_a=self.config.max_drug_length,
                 max_length_b=self.config.max_target_length,
-                name_a=self.config.cache_drug_role,
-                name_b=self.config.cache_target_role,
                 embeddings_a=self.drug_embeddings,
                 embeddings_b=self.target_embeddings,
             )
@@ -326,7 +326,7 @@ class PPIDataModule(L.LightningDataModule):
                 logger.error(f"Val/Test overlap: {len(val_test_overlap)} pairs!")
 
     def train_dataloader(self) -> DataLoader:
-        """Create training dataloader."""
+        """Create training dataloader with collate_fn."""
         return DataLoader(
             self.train_dataset,
             batch_size=self.config.batch_size,
@@ -334,10 +334,11 @@ class PPIDataModule(L.LightningDataModule):
             num_workers=self.config.num_workers,
             pin_memory=self.config.pin_memory,
             persistent_workers=self.config.num_workers > 0,
+            collate_fn=self._collate_fn,
         )
 
     def val_dataloader(self) -> DataLoader:
-        """Create validation dataloader."""
+        """Create validation dataloader with collate_fn."""
         return DataLoader(
             self.val_dataset,
             batch_size=self.config.batch_size,
@@ -345,10 +346,11 @@ class PPIDataModule(L.LightningDataModule):
             num_workers=self.config.num_workers,
             pin_memory=self.config.pin_memory,
             persistent_workers=self.config.num_workers > 0,
+            collate_fn=self._collate_fn,
         )
 
     def test_dataloader(self) -> Optional[DataLoader]:
-        """Create test dataloader."""
+        """Create test dataloader with collate_fn."""
         if self.test_dataset is None:
             return None
 
@@ -359,6 +361,7 @@ class PPIDataModule(L.LightningDataModule):
             num_workers=self.config.num_workers,
             pin_memory=self.config.pin_memory,
             persistent_workers=self.config.num_workers > 0,
+            collate_fn=self._collate_fn,
         )
 
     def predict_dataloader(self) -> Optional[DataLoader]:
