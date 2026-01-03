@@ -18,46 +18,38 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PermeabilityDataConfig:
-    """Configuration for permeability DataModule."""
+    """Configuration for permeability DataModule.
 
-    train_file: str = "./data/cycpeptmpdb_permeability_train.csv"
-    test_file: str = "./data/cycpeptmpdb_permeability_test.csv"
-    helm_column: str = "HELM"
-    target_column: str = "Permeability"
-    val_ratio: float = 0.1
-    batch_size: int = 32
-    max_seq_length: int = 512
-    num_workers: int = 8
-    pin_memory: bool = True
-    seed: int = 42
+    All fields are required - values come from YAML configuration.
+    """
+
+    train_file: str
+    test_file: str
+    helm_column: str
+    target_column: str
+    val_ratio: float
+    batch_size: int
+    max_seq_length: int
+    num_workers: int
+    pin_memory: bool
+    seed: int
 
 
 class PermeabilityDataModule(L.LightningDataModule):
     """DataModule for permeability regression.
 
     Args:
-        config: PermeabilityDataConfig for data loading settings
+        config: PermeabilityDataConfig for data loading settings (required)
         tokenizer: PreTrainedTokenizer instance (required)
-
-    Example:
-        >>> from transformers import AutoTokenizer
-        >>> config = PermeabilityDataConfig()
-        >>> tokenizer = AutoTokenizer.from_pretrained("Flansma/helm-bert", trust_remote_code=True)
-        >>> datamodule = PermeabilityDataModule(config, tokenizer)
-        >>> datamodule.setup()
     """
 
     def __init__(
         self,
-        config: Optional[PermeabilityDataConfig] = None,
-        tokenizer: Optional[PreTrainedTokenizer] = None,
+        config: PermeabilityDataConfig,
+        tokenizer: PreTrainedTokenizer,
     ):
         super().__init__()
-        self.config = config or PermeabilityDataConfig()
-        if tokenizer is None:
-            raise ValueError(
-                "tokenizer is required. Use AutoTokenizer.from_pretrained('Flansma/helm-bert', trust_remote_code=True)"
-            )
+        self.config = config
         self.tokenizer = tokenizer
 
         # Data containers

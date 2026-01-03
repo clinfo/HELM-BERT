@@ -24,37 +24,28 @@ from src.utils.metrics import compute_classification_metrics
 
 logger = logging.getLogger(__name__)
 
-# Default Hub model
-DEFAULT_DRUG_MODEL = "Flansma/helm-bert"
-
-
-# ESM-2 hidden sizes by model name
-ESM_HIDDEN_SIZES = {
-    "facebook/esm2_t6_8M_UR50D": 320,
-    "facebook/esm2_t12_35M_UR50D": 480,
-    "facebook/esm2_t30_150M_UR50D": 640,
-    "facebook/esm2_t33_650M_UR50D": 1280,
-    "facebook/esm2_t36_3B_UR50D": 2560,
-    "facebook/esm2_t48_15B_UR50D": 5120,
-}
-
 
 @dataclass
 class PPITrainingConfig:
-    """Configuration for PPI training."""
+    """Configuration for PPI training.
 
-    encoder_lr: float = 3e-5
-    head_lr: float = 1e-4
-    weight_decay: float = 0.01
-    max_epochs: int = 200
-    early_stopping_patience: int = 20
-    mlp_dropout: float = 0.1
-    num_classes: int = 1
-    pos_weight: Optional[float] = 4.0
-    freeze_drug_encoder: bool = True
-    freeze_target_encoder: bool = True
-    use_cached_embeddings: bool = True
-    target_encoder: str = "facebook/esm2_t33_650M_UR50D"
+    All fields are required - values come from YAML configuration.
+    """
+
+    encoder_lr: float
+    head_lr: float
+    weight_decay: float
+    max_epochs: int
+    early_stopping_patience: int
+    mlp_dropout: float
+    num_classes: int
+    pos_weight: Optional[float]
+    freeze_drug_encoder: bool
+    freeze_target_encoder: bool
+    use_cached_embeddings: bool
+    target_encoder: str
+    esm_hidden_sizes: Dict[str, int]
+    prediction_threshold: float
 
 
 class HELMGLaMLightning(L.LightningModule):
@@ -63,25 +54,22 @@ class HELMGLaMLightning(L.LightningModule):
     Uses HELM-BERT for peptide encoding and ESM-2 for protein encoding.
 
     Args:
-        drug_model_path: HuggingFace Hub model ID or local path (default: Flansma/helm-bert)
-        training_config: PPITrainingConfig for training settings
-
-    Example:
-        >>> config = PPITrainingConfig()
-        >>> model = HELMGLaMLightning(training_config=config)  # Uses Flansma/helm-bert
-        >>> trainer = L.Trainer(max_epochs=100)
-        >>> trainer.fit(model, datamodule)
+        drug_model_path: HuggingFace Hub model ID or local path (required)
+        training_config: PPITrainingConfig for training settings (required)
+        trust_remote_code: Whether to trust remote code for drug encoder
     """
 
     def __init__(
         self,
-        drug_model_path: Optional[str] = None,
-        training_config: Optional[PPITrainingConfig] = None,
+        drug_model_path: str,
+        training_config: PPITrainingConfig,
+        trust_remote_code: bool = True,
     ):
         super().__init__()
 
-        self.training_config = training_config or PPITrainingConfig()
-        self.drug_model_path = drug_model_path or DEFAULT_DRUG_MODEL
+        self.training_config = training_config
+        self.drug_model_path = drug_model_path
+        self.trust_remote_code = trust_remote_code
 
         self.save_hyperparameters(
             {
@@ -108,12 +96,19 @@ class HELMGLaMLightning(L.LightningModule):
         """Initialize drug and target encoders."""
         # Get dimensions from config
         drug_config = AutoConfig.from_pretrained(
-            self.drug_model_path, trust_remote_code=True
+            self.drug_model_path, trust_remote_code=self.trust_remote_code
         )
         self.drug_dim = drug_config.hidden_size
-        self.target_dim = ESM_HIDDEN_SIZES.get(
-            self.training_config.target_encoder, 1280
-        )
+
+        # Get ESM-2 hidden size from configuration
+        target_encoder_name = self.training_config.target_encoder
+        if target_encoder_name not in self.training_config.esm_hidden_sizes:
+            raise ValueError(
+                f"Unknown ESM-2 model: {target_encoder_name}. "
+                f"Add it to esm_hidden_sizes in ppi.yaml. "
+                f"Known models: {list(self.training_config.esm_hidden_sizes.keys())}"
+            )
+        self.target_dim = self.training_config.esm_hidden_sizes[target_encoder_name]
 
         # Skip encoder creation if using cached embeddings
         if self.use_cached_embeddings:
@@ -127,7 +122,7 @@ class HELMGLaMLightning(L.LightningModule):
         # Create drug encoder (HELM-BERT from Hub)
         self.drug_encoder = AutoModel.from_pretrained(
             self.drug_model_path,
-            trust_remote_code=True,
+            trust_remote_code=self.trust_remote_code,
         )
 
         # Create target encoder (ESM-2)
@@ -257,7 +252,7 @@ class HELMGLaMLightning(L.LightningModule):
                     target_mask.unsqueeze(-1).expand(hidden_states.size()).float()
                 )
                 sum_embeddings = torch.sum(hidden_states * mask_expanded, 1)
-                sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
+                sum_mask = torch.clamp(mask_expanded.sum(1), min=torch.finfo(hidden_states.dtype).eps)
                 return sum_embeddings / sum_mask
             return hidden_states.mean(dim=1)
 
@@ -334,7 +329,7 @@ class HELMGLaMLightning(L.LightningModule):
         self.validation_outputs.append(
             {
                 "predictions": predictions.detach(),
-                "labels": labels.detach(),
+                "targets": labels.detach(),
             }
         )
 
@@ -358,7 +353,7 @@ class HELMGLaMLightning(L.LightningModule):
         self.test_outputs.append(
             {
                 "predictions": predictions.detach(),
-                "labels": labels.detach(),
+                "targets": labels.detach(),
             }
         )
 
@@ -372,7 +367,7 @@ class HELMGLaMLightning(L.LightningModule):
 
         return {
             "predictions": predictions.detach(),
-            "labels": batch["label"].detach(),
+            "targets": batch["label"].detach(),
         }
 
     def on_validation_epoch_end(self) -> None:
@@ -390,15 +385,17 @@ class HELMGLaMLightning(L.LightningModule):
 
         try:
             predictions = torch.cat([x["predictions"] for x in outputs])
-            labels = torch.cat([x["labels"] for x in outputs])
-        except Exception as e:
+            targets = torch.cat([x["targets"] for x in outputs])
+        except (RuntimeError, ValueError) as e:
             logger.error(f"Failed to concatenate {prefix} outputs: {e}")
             outputs.clear()
             return
 
         outputs.clear()
 
-        metrics = compute_classification_metrics(predictions, labels, self.num_classes)
+        metrics = compute_classification_metrics(
+            predictions, targets, self.num_classes, self.training_config.prediction_threshold
+        )
 
         prog_bar = prefix == "val"
         for name, value in metrics.items():

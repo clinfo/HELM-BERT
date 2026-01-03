@@ -7,7 +7,7 @@ using HELMBertForSequenceClassification with MLP head.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import lightning as L
 import numpy as np
@@ -19,22 +19,23 @@ from src.utils.metrics import compute_regression_metrics
 
 logger = logging.getLogger(__name__)
 
-# Default Hub model
-DEFAULT_MODEL = "Flansma/helm-bert"
-
 
 @dataclass
 class PermeabilityTrainingConfig:
-    """Configuration for permeability training."""
+    """Configuration for permeability training.
 
-    encoder_lr: float = 3e-5
-    head_lr: float = 1e-4
-    weight_decay: float = 0.01
-    freeze_encoder: bool = False
-    max_epochs: int = 200
-    early_stopping_patience: int = 20
-    classifier_dropout: float = 0.1
-    classifier_num_layers: int = 2
+    All fields are required - values come from YAML configuration.
+    """
+
+    encoder_lr: float
+    head_lr: float
+    weight_decay: float
+    freeze_encoder: bool
+    max_epochs: int
+    early_stopping_patience: int
+    classifier_dropout: float
+    classifier_num_layers: int
+    encoder_attribute_name: str
 
 
 class HELMBertPermeabilityLightning(L.LightningModule):
@@ -43,25 +44,22 @@ class HELMBertPermeabilityLightning(L.LightningModule):
     Uses HELMBertForSequenceClassification with 2-layer MLP head for regression.
 
     Args:
-        model_name_or_path: HuggingFace Hub model ID or local path (default: Flansma/helm-bert)
-        training_config: PermeabilityTrainingConfig for training settings
-
-    Example:
-        >>> config = PermeabilityTrainingConfig()
-        >>> model = HELMBertPermeabilityLightning(training_config=config)
-        >>> trainer = L.Trainer(max_epochs=100)
-        >>> trainer.fit(model, datamodule)
+        model_name_or_path: HuggingFace Hub model ID or local path (required)
+        training_config: PermeabilityTrainingConfig for training settings (required)
+        trust_remote_code: Whether to trust remote code from HuggingFace Hub
     """
 
     def __init__(
         self,
-        model_name_or_path: Optional[str] = None,
-        training_config: Optional[PermeabilityTrainingConfig] = None,
+        model_name_or_path: str,
+        training_config: PermeabilityTrainingConfig,
+        trust_remote_code: bool = True,
     ):
         super().__init__()
 
-        self.training_config = training_config or PermeabilityTrainingConfig()
-        self.model_name_or_path = model_name_or_path or DEFAULT_MODEL
+        self.training_config = training_config
+        self.model_name_or_path = model_name_or_path
+        self.trust_remote_code = trust_remote_code
 
         self.save_hyperparameters(
             {
@@ -75,7 +73,7 @@ class HELMBertPermeabilityLightning(L.LightningModule):
         logger.info(f"Loading model from {self.model_name_or_path}")
         config = AutoConfig.from_pretrained(
             self.model_name_or_path,
-            trust_remote_code=True,
+            trust_remote_code=self.trust_remote_code,
         )
         config.num_labels = 1
         config.problem_type = "regression"
@@ -86,12 +84,12 @@ class HELMBertPermeabilityLightning(L.LightningModule):
         self.model = AutoModelForSequenceClassification.from_pretrained(
             self.model_name_or_path,
             config=config,
-            trust_remote_code=True,
+            trust_remote_code=self.trust_remote_code,
         )
 
         # Apply freeze setting
         if self.training_config.freeze_encoder:
-            for param in self.model.helmbert.parameters():
+            for param in self._encoder.parameters():
                 param.requires_grad = False
             logger.info("Encoder frozen (freeze_encoder=True)")
 
@@ -104,10 +102,15 @@ class HELMBertPermeabilityLightning(L.LightningModule):
 
         self._log_model_info()
 
+    @property
+    def _encoder(self) -> nn.Module:
+        """Get encoder module using configured attribute name."""
+        return getattr(self.model, self.training_config.encoder_attribute_name)
+
     def _log_model_info(self) -> None:
         """Log model configuration."""
         total_params = sum(p.numel() for p in self.parameters())
-        encoder_params = sum(p.numel() for p in self.model.helmbert.parameters())
+        encoder_params = sum(p.numel() for p in self._encoder.parameters())
         classifier_params = sum(p.numel() for p in self.model.classifier.parameters())
 
         logger.info("Permeability Model Configuration:")
@@ -236,7 +239,7 @@ class HELMBertPermeabilityLightning(L.LightningModule):
         try:
             all_predictions = torch.cat([x["predictions"] for x in outputs])
             all_targets = torch.cat([x["targets"] for x in outputs])
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.error(f"Failed to concatenate {prefix} outputs: {e}")
             outputs.clear()
             return
@@ -259,7 +262,7 @@ class HELMBertPermeabilityLightning(L.LightningModule):
         # Only include encoder params if not frozen
         if not self.training_config.freeze_encoder:
             param_groups.append({
-                "params": self.model.helmbert.parameters(),
+                "params": self._encoder.parameters(),
                 "lr": self.training_config.encoder_lr,
             })
 

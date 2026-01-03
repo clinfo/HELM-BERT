@@ -11,23 +11,23 @@ from typing import Any, Dict, Optional
 
 import lightning as L
 import torch
-from transformers import AutoModelForMaskedLM, AutoConfig
+from transformers import AutoModelForMaskedLM
 
 logger = logging.getLogger(__name__)
-
-# Default Hub model
-DEFAULT_MODEL = "Flansma/helm-bert"
 
 
 @dataclass
 class MLMTrainingConfig:
-    """Configuration for MLM training."""
+    """Configuration for MLM training.
 
-    learning_rate: float = 1e-4
-    weight_decay: float = 0.01
-    max_epochs: int = 500
-    early_stopping_patience: int = 20
-    ignore_index: int = -100
+    All fields are required - values come from YAML configuration.
+    """
+
+    learning_rate: float
+    weight_decay: float
+    max_epochs: int
+    early_stopping_patience: int
+    ignore_index: int
 
 
 class HELMBertMLMLightning(L.LightningModule):
@@ -38,45 +38,37 @@ class HELMBertMLMLightning(L.LightningModule):
     2. From scratch: Initialize with random weights
 
     Args:
-        model_name_or_path: HuggingFace Hub model ID or local path for continue pre-training
-        from_scratch: If True, initialize with random weights instead of loading pretrained
-        model_config: Optional config override (only used when from_scratch=True)
-        training_config: MLMTrainingConfig for training settings
-        max_epochs: Maximum number of training epochs (for scheduler)
-
-    Example (continue pre-training):
-        >>> model = HELMBertMLMLightning()  # Uses Flansma/helm-bert
-        >>> trainer = L.Trainer(max_epochs=100)
-        >>> trainer.fit(model, datamodule)
-
-    Example (from scratch):
-        >>> from transformers import AutoConfig
-        >>> config = AutoConfig.from_pretrained("Flansma/helm-bert", trust_remote_code=True)
-        >>> config.num_hidden_layers = 12  # Custom architecture
-        >>> model = HELMBertMLMLightning(from_scratch=True, model_config=config)
+        model_name_or_path: HuggingFace Hub model ID or local path (required)
+        training_config: MLMTrainingConfig for training settings (required)
+        from_scratch: If True, initialize with random weights (required)
+        model_config: Config override (required when from_scratch=True)
+        trust_remote_code: Whether to trust remote code from HuggingFace Hub
+        use_emd: Whether to use Enhanced Mask Decoder (DeBERTa feature)
     """
 
     def __init__(
         self,
-        model_name_or_path: Optional[str] = None,
-        from_scratch: bool = False,
+        model_name_or_path: str,
+        training_config: MLMTrainingConfig,
+        from_scratch: bool,
         model_config=None,
-        training_config: Optional[MLMTrainingConfig] = None,
-        max_epochs: int = 500,
+        trust_remote_code: bool = True,
+        use_emd: bool = True,
     ):
         super().__init__()
 
-        self.training_config = training_config or MLMTrainingConfig()
-        self.max_epochs = max_epochs
-        self.model_name_or_path = model_name_or_path or DEFAULT_MODEL
+        self.training_config = training_config
+        self.model_name_or_path = model_name_or_path
         self.from_scratch = from_scratch
+        self.use_emd = use_emd
 
         # Initialize model
         if from_scratch:
-            # From scratch: use provided config or load from reference
+            # From scratch: model_config is required
             if model_config is None:
-                model_config = AutoConfig.from_pretrained(
-                    self.model_name_or_path, trust_remote_code=True
+                raise ValueError(
+                    "model_config is required when from_scratch=True. "
+                    "Create it with AutoConfig and set architecture parameters."
                 )
             self.model_config = model_config
 
@@ -87,7 +79,7 @@ class HELMBertMLMLightning(L.LightningModule):
 
             self.model = AutoModelForMaskedLM.from_config(
                 model_config,
-                trust_remote_code=True,
+                trust_remote_code=trust_remote_code,
             )
         else:
             # Continue pre-training: load from checkpoint
@@ -95,7 +87,7 @@ class HELMBertMLMLightning(L.LightningModule):
 
             self.model = AutoModelForMaskedLM.from_pretrained(
                 self.model_name_or_path,
-                trust_remote_code=True,
+                trust_remote_code=trust_remote_code,
             )
             self.model_config = self.model.config
 
@@ -139,7 +131,7 @@ class HELMBertMLMLightning(L.LightningModule):
             input_ids=input_ids,
             attention_mask=attention_mask,
             labels=labels,
-            use_emd=True,
+            use_emd=self.use_emd,
             return_dict=True,
         )
 
@@ -217,7 +209,7 @@ class HELMBertMLMLightning(L.LightningModule):
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=self.max_epochs,
+            T_max=self.training_config.max_epochs,
         )
 
         return {

@@ -1,0 +1,80 @@
+# =============================================================================
+# HELM-BERT MLM Training Configuration
+# =============================================================================
+# Inherits common settings from default.yaml.
+# Contains ALL MLM-specific settings.
+#
+# Usage:
+#   python scripts/train_mlm.py
+#   python scripts/train_mlm.py training.batch_size=128
+
+# =============================================================================
+# Paths
+# =============================================================================
+paths:
+  output_dir: ./outputs/mlm
+  data_dir: ./data/deduplicated
+  hf_checkpoint_name: helmbert-base
+
+# =============================================================================
+# Model
+# =============================================================================
+model:
+  from_scratch: false
+  use_emd: true  # Enhanced Mask Decoder (DeBERTa feature)
+
+  # Architecture (only used when from_scratch: true)
+  architecture:
+    hidden_size: 768
+    num_hidden_layers: 6
+    num_attention_heads: 12
+    intermediate_size: 3072
+    max_position_embeddings: 512
+
+# =============================================================================
+# Training
+# =============================================================================
+training:
+  max_epochs: 500
+  batch_size: 64
+  learning_rate: 1.0e-4
+
+# =============================================================================
+# Data
+# =============================================================================
+data:
+  train_ratio: 0.9
+
+  # Datasets to combine for MLM training
+  datasets:
+    - name: chembl
+      file: chembl_deduplicated.csv
+      helm_column: helm_notation
+    - name: cycpeptmpdb
+      file: cycpeptmpdb_deduplicated.csv
+      helm_column: HELM
+    - name: propedia
+      file: propedia_deduplicated.csv
+      helm_column: Peptide_HELM
+
+  # Span Masking Configuration (SpanBERT-style)
+  masking:
+    mlm_probability: 0.15
+    mask_ratio: 0.8
+    random_ratio: 0.1
+    keep_ratio: 0.1
+    min_span_length: 1
+    max_span_length: 5
+    geometric_p: 0.2
+
+# =============================================================================
+# MLM-Specific Settings
+# =============================================================================
+mlm:
+  ignore_index: -100
+
+# =============================================================================
+# Logging
+# =============================================================================
+logging:
+  wandb_project: helmbert-mlm

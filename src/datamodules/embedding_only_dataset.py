@@ -18,11 +18,11 @@ class EmbeddingOnlyDataset(Dataset):
         sequences_a: List[str],
         sequences_b: List[str],
         labels: List[float],
+        embeddings_a: Dict[str, torch.Tensor],
+        embeddings_b: Dict[str, torch.Tensor],
         weights: Optional[List[float]] = None,
         name_a: str = "drug",
         name_b: str = "target",
-        embeddings_a: Optional[Dict[str, torch.Tensor]] = None,
-        embeddings_b: Optional[Dict[str, torch.Tensor]] = None,
     ) -> None:
         super().__init__()
         self.sequences_a = sequences_a
@@ -31,8 +31,8 @@ class EmbeddingOnlyDataset(Dataset):
         self.weights = weights
         self.name_a = name_a
         self.name_b = name_b
-        self.embeddings_a = embeddings_a or {}
-        self.embeddings_b = embeddings_b or {}
+        self.embeddings_a = embeddings_a
+        self.embeddings_b = embeddings_b
 
         if len(self.sequences_a) != len(self.sequences_b) or len(
             self.sequences_a

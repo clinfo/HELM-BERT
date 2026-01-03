@@ -31,7 +31,19 @@ uv venv --python 3.11 && source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
 
-## How to Use
+## Quick Start
+
+```bash
+# Permeability prediction
+python scripts/train_permeability.py
+
+# PPI classification
+python scripts/train_ppi.py
+```
+
+Override settings: `--batch_size 64 --lr 1e-4` or `--config custom.yaml`
+
+## Inference
 
 ```python
 from transformers import AutoModel, AutoTokenizer
@@ -47,36 +59,34 @@ embeddings = outputs.last_hidden_state
 
 ## Training
 
-### MLM Training
+### MLM Pre-training
 
 ```bash
 # Continue pre-training from Hub model (default)
 python scripts/train_mlm.py
+python scripts/train_mlm.py --batch_size 128 --lr 5e-5
 
-# Continue pre-training from local checkpoint
-python scripts/train_mlm.py --pretrained_path ./my-checkpoint
-
-# Train from scratch
+# From scratch
 python scripts/train_mlm.py --from_scratch
 
 # From scratch with custom architecture
-python scripts/train_mlm.py --from_scratch --num_hidden_layers 12 --hidden_size 768
+python scripts/train_mlm.py --from_scratch \
+    model.architecture.num_hidden_layers=12 \
+    model.architecture.hidden_size=768
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--pretrained_path` | Flansma/helm-bert | Model to continue pre-training from |
-| `--from_scratch` | False | Train from scratch instead of continue pre-training |
-| `--hidden_size` | 768 | Hidden dimension (only with --from_scratch) |
-| `--num_hidden_layers` | 6 | Number of layers (only with --from_scratch) |
-| `--num_attention_heads` | 12 | Number of attention heads (only with --from_scratch) |
-| `--max_epochs` | 500 | Maximum training epochs |
-| `--batch_size` | 64 | Batch size |
-| `--learning_rate` | 1e-4 | Learning rate |
-| `--mlm_probability` | 0.15 | Masking probability |
-| `--early_stopping_patience` | 20 | Early stopping patience |
-| `--precision` | 32-true | 32-true, 16-mixed, bf16-mixed |
-| `--disable_wandb` | False | Disable WandB logging |
+**Key configuration options** (`configs/mlm.yaml`):
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `model.pretrained_path` | Flansma/helm-bert | Base model for continue pre-training |
+| `model.from_scratch` | false | Train from scratch |
+| `model.architecture.hidden_size` | 768 | Hidden dimension (from_scratch only) |
+| `model.architecture.num_hidden_layers` | 6 | Number of layers (from_scratch only) |
+| `training.max_epochs` | 500 | Maximum training epochs |
+| `training.batch_size` | 64 | Batch size |
+| `training.learning_rate` | 1e-4 | Learning rate |
+| `data.masking.mlm_probability` | 0.15 | Masking probability |
 
 ### Permeability Prediction
 
@@ -87,59 +97,76 @@ python scripts/train_permeability.py
 # Freeze encoder (train head only)
 python scripts/train_permeability.py --freeze_encoder --head_lr 1e-3
 
+# Use local checkpoint
+python scripts/train_permeability.py --pretrained ./checkpoints/my-model
+
 # Custom data
-python scripts/train_permeability.py \
-    --train_file ./data/custom_train.csv --test_file ./data/custom_test.csv \
-    --helm_column HELM --target_column LogP
+python scripts/train_permeability.py --train_file ./data/train.csv --test_file ./data/test.csv
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--pretrained_path` | Flansma/helm-bert | Pretrained model path or Hub ID |
-| `--freeze_encoder` | False | Freeze encoder weights |
-| `--classifier_num_layers` | 2 | Number of MLP head layers |
-| `--classifier_dropout` | 0.1 | Classifier dropout rate |
-| `--max_epochs` | 200 | Maximum training epochs |
-| `--batch_size` | 32 | Batch size |
-| `--encoder_lr` | 3e-5 | Encoder learning rate |
-| `--head_lr` | 1e-4 | Head learning rate |
-| `--early_stopping_patience` | 20 | Early stopping patience |
-| `--precision` | 32-true | 32-true, 16-mixed, bf16-mixed |
-| `--disable_wandb` | False | Disable WandB logging |
+**Key configuration options** (`configs/permeability.yaml`):
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `model.pretrained_path` | Flansma/helm-bert | Pretrained model path |
+| `model.freeze_encoder` | false | Freeze encoder weights |
+| `model.classifier.num_layers` | 2 | MLP head layers |
+| `model.classifier.dropout` | 0.1 | Classifier dropout |
+| `training.max_epochs` | 200 | Maximum training epochs |
+| `training.batch_size` | 32 | Batch size |
+| `training.encoder_lr` | 3e-5 | Encoder learning rate |
+| `training.head_lr` | 1e-4 | Head learning rate |
 
 ### PPI Classification
+
+Uses HELM-BERT (peptide) + ESM-2 (protein) dual encoder architecture.
 
 ```bash
 # Default (both encoders frozen)
 python scripts/train_ppi.py
 
-# Fine-tune drug encoder
-python scripts/train_ppi.py --finetune_drug_encoder
+# Fine-tune drug encoder (unfreeze)
+python scripts/train_ppi.py --freeze_drug_encoder false
 
-# Fine-tune both encoders
-python scripts/train_ppi.py --finetune_drug_encoder --finetune_target_encoder --encoder_lr 1e-5
+# Fine-tune both encoders (unfreeze)
+python scripts/train_ppi.py --freeze_drug_encoder false --freeze_target_encoder false --encoder_lr 1e-5
+
+# Use cached embeddings (faster training)
+python scripts/train_ppi.py --use_cached_embeddings
+
+# Use local checkpoint
+python scripts/train_ppi.py --pretrained ./checkpoints/my-model
 
 # Custom data
-python scripts/train_ppi.py \
-    --train_file ./data/custom_ppi_train.csv --test_file ./data/custom_ppi_test.csv \
-    --drug_column Peptide_HELM --target_column Protein_Seq --label_column Binding
+python scripts/train_ppi.py --train_file ./data/train.csv --test_file ./data/test.csv
 ```
 
-Uses HELM-BERT (peptide) + ESM-2 (protein) dual encoder.
+**Key configuration options** (`configs/ppi.yaml`):
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--pretrained_path` | Flansma/helm-bert | Drug encoder model |
-| `--target_encoder` | facebook/esm2_t33_650M_UR50D | Target encoder model |
-| `--finetune_drug_encoder` | - | Unfreeze drug encoder |
-| `--finetune_target_encoder` | - | Unfreeze target encoder |
-| `--max_epochs` | 200 | Maximum training epochs |
-| `--batch_size` | 32 | Batch size |
-| `--encoder_lr` | 3e-5 | Encoder learning rate |
-| `--head_lr` | 1e-4 | Head learning rate |
-| `--early_stopping_patience` | 20 | Early stopping patience |
-| `--precision` | 32-true | 32-true, 16-mixed, bf16-mixed |
-| `--disable_wandb` | False | Disable WandB logging |
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `model.drug_encoder.pretrained_path` | Flansma/helm-bert | Drug encoder model |
+| `model.drug_encoder.freeze` | true | Freeze drug encoder |
+| `model.target_encoder.pretrained_path` | facebook/esm2_t33_650M_UR50D | Target encoder |
+| `model.target_encoder.freeze` | true | Freeze target encoder |
+| `training.use_cached_embeddings` | false | Use pre-computed embeddings |
+| `training.max_epochs` | 200 | Maximum training epochs |
+| `training.batch_size` | 32 | Batch size |
+| `training.encoder_lr` | 3e-5 | Encoder learning rate |
+| `training.head_lr` | 1e-4 | Head learning rate |
+
+### Common Options
+
+These options apply to all training scripts (`configs/default.yaml`):
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `training.seed` | 42 | Random seed |
+| `training.early_stopping_patience` | 20 | Early stopping patience |
+| `training.gradient_clip_val` | 1.0 | Gradient clipping |
+| `hardware.devices` | auto | GPU devices |
+| `hardware.precision` | 32-true | 32-true, 16-mixed, bf16-mixed |
+| `logging.disable_wandb` | false | Disable WandB logging |
 
 ## Citation
 

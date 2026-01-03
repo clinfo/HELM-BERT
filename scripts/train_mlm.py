@@ -1,32 +1,22 @@
 #!/usr/bin/env python
 """MLM training script for HELM-BERT.
 
-Supports two modes:
-1. Continue pre-training (default): Load from existing checkpoint and continue MLM training
-2. From scratch: Initialize with random weights (use --from_scratch flag)
-
-Example (continue pre-training):
+Usage:
     python scripts/train_mlm.py
-    python scripts/train_mlm.py --pretrained_path Flansma/helm-bert
-    python scripts/train_mlm.py --pretrained_path ./my-checkpoint --max_epochs 100
-
-Example (from scratch):
-    python scripts/train_mlm.py --from_scratch
-    python scripts/train_mlm.py --from_scratch --num_hidden_layers 12
+    python scripts/train_mlm.py --config configs/mlm.yaml
+    python scripts/train_mlm.py training.batch_size=128 model.from_scratch=true
+    python scripts/train_mlm.py --batch_size 128 --from_scratch true
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
 import time
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-# Minimal environment setup before ML library imports
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -35,11 +25,13 @@ from lightning.pytorch.loggers import WandbLogger
 from transformers import AutoConfig, AutoTokenizer
 
 from scripts.training_utils import (
-    DEFAULT_MODEL,
     SEPARATOR_LINE,
+    config_to_checkpoint_config,
+    config_to_display_config,
     create_callbacks,
     create_output_dirs,
     load_best_checkpoint,
+    load_config,
     log_completion,
     log_header,
     log_summary,
@@ -47,195 +39,133 @@ from scripts.training_utils import (
     mark_completion,
     setup_logging,
     setup_training_env,
+    to_dict,
 )
-from src.datamodules import MLMDataConfig, MLMDataModule
+from src.datamodules import MLMDataModule, MLMDataConfig
+from src.datamodules.mlm_datamodule import DatasetInfo
 from src.models.mlm_lightning import HELMBertMLMLightning, MLMTrainingConfig
-
-
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="HELM-BERT MLM Training (continue pre-training or from scratch)"
-    )
-
-    # Output
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="./outputs/mlm",
-        help="Output directory",
-    )
-    parser.add_argument(
-        "--checkpoint_dir",
-        type=str,
-        default="./checkpoints",
-        help="Directory to save final checkpoints",
-    )
-
-    # Model
-    parser.add_argument(
-        "--pretrained_path",
-        type=str,
-        default=DEFAULT_MODEL,
-        help="HuggingFace Hub model ID or local path for continue pre-training",
-    )
-    parser.add_argument(
-        "--from_scratch",
-        action="store_true",
-        help="Train from scratch instead of continue pre-training",
-    )
-
-    # Architecture (only used with --from_scratch)
-    parser.add_argument("--hidden_size", type=int, default=768)
-    parser.add_argument("--num_hidden_layers", type=int, default=6)
-    parser.add_argument("--num_attention_heads", type=int, default=12)
-    parser.add_argument("--intermediate_size", type=int, default=3072)
-    parser.add_argument("--max_position_embeddings", type=int, default=512)
-
-    # Training
-    parser.add_argument("--max_epochs", type=int, default=500)
-    parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--learning_rate", type=float, default=1e-4)
-    parser.add_argument("--weight_decay", type=float, default=0.01)
-    parser.add_argument("--mlm_probability", type=float, default=0.15)
-    parser.add_argument("--early_stopping_patience", type=int, default=20)
-    parser.add_argument("--gradient_clip_val", type=float, default=1.0)
-
-    # Data
-    parser.add_argument(
-        "--data_dir",
-        type=str,
-        default="./data/deduplicated",
-        help="Directory containing training data",
-    )
-    parser.add_argument("--num_workers", type=int, default=8)
-
-    # Hardware
-    parser.add_argument(
-        "--devices",
-        type=int,
-        default=1,
-        help="Number of GPUs to use",
-    )
-    parser.add_argument(
-        "--precision",
-        type=str,
-        default="32-true",
-        choices=["32-true", "16-mixed", "bf16-mixed"],
-    )
-    parser.add_argument("--seed", type=int, default=42)
-
-    # Logging
-    parser.add_argument("--wandb_project", type=str, default="helmbert-mlm")
-    parser.add_argument("--wandb_entity", type=str, default=None)
-    parser.add_argument("--disable_wandb", action="store_true")
-
-    return parser.parse_args()
 
 
 def main():
     """Main MLM training function."""
     start_time = time.time()
-    args = parse_args()
+
+    # Load configuration
+    config = load_config(task="mlm")
 
     # Setup environment
-    setup_training_env(args.seed)
+    setup_training_env(config.training.seed, config.trainer.float32_matmul_precision)
 
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    mode_str = "scratch" if args.from_scratch else "continue"
+    mode_str = "scratch" if config.model.from_scratch else "continue"
     run_name = f"helmbert_mlm_{mode_str}_{timestamp}"
-    output_dir, checkpoint_dir = create_output_dirs(Path(args.output_dir), run_name)
+    output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     # Setup logging
     logger = setup_logging(output_dir, timestamp, "train_mlm")
-    title = "HELM-BERT MLM Pretraining (from scratch)" if args.from_scratch else "HELM-BERT MLM Continue Pre-training"
+    title = "HELM-BERT MLM Pretraining (from scratch)" if config.model.from_scratch else "HELM-BERT MLM Continue Pre-training"
     log_header(logger, title)
 
     # Create training config
     training_config = MLMTrainingConfig(
-        learning_rate=args.learning_rate,
-        weight_decay=args.weight_decay,
+        learning_rate=config.training.learning_rate,
+        weight_decay=config.training.weight_decay,
+        max_epochs=config.training.max_epochs,
+        early_stopping_patience=config.training.early_stopping_patience,
+        ignore_index=config.mlm.ignore_index,
     )
 
+    # Create data config
+    datasets = [
+        DatasetInfo(name=ds.name, file=ds.file, helm_column=ds.helm_column)
+        for ds in config.data.datasets
+    ]
     data_config = MLMDataConfig(
-        data_dir=args.data_dir,
-        batch_size=args.batch_size,
-        max_seq_length=args.max_position_embeddings,
-        mlm_probability=args.mlm_probability,
-        num_workers=args.num_workers,
+        data_dir=config.paths.data_dir,
+        datasets=datasets,
+        train_ratio=config.data.train_ratio,
+        batch_size=config.training.batch_size,
+        max_seq_length=config.data.max_seq_length,
+        num_workers=config.data.num_workers,
+        pin_memory=config.data.pin_memory,
+        seed=config.training.seed,
+        mlm_probability=config.data.masking.mlm_probability,
+        mask_ratio=config.data.masking.mask_ratio,
+        random_ratio=config.data.masking.random_ratio,
+        keep_ratio=config.data.masking.keep_ratio,
+        min_span_length=config.data.masking.min_span_length,
+        max_span_length=config.data.masking.max_span_length,
+        geometric_p=config.data.masking.geometric_p,
+        ignore_index=config.mlm.ignore_index,
     )
 
     # Prepare model config (only used for from_scratch mode)
     model_config = None
-    if args.from_scratch:
+    if config.model.from_scratch:
+        arch = config.model.architecture
         model_config = AutoConfig.from_pretrained(
-            args.pretrained_path, trust_remote_code=True
+            config.model.pretrained_path, trust_remote_code=config.model.trust_remote_code
         )
-        model_config.hidden_size = args.hidden_size
-        model_config.num_hidden_layers = args.num_hidden_layers
-        model_config.num_attention_heads = args.num_attention_heads
-        model_config.intermediate_size = args.intermediate_size
-        model_config.max_position_embeddings = args.max_position_embeddings
+        model_config.hidden_size = arch.hidden_size
+        model_config.num_hidden_layers = arch.num_hidden_layers
+        model_config.num_attention_heads = arch.num_attention_heads
+        model_config.intermediate_size = arch.intermediate_size
+        model_config.max_position_embeddings = arch.max_position_embeddings
 
     # Save configurations
-    config_path = output_dir / "config.json"
-    config_dict = {
-        "mode": "from_scratch" if args.from_scratch else "continue_pretraining",
-        "pretrained_path": args.pretrained_path,
-        "training": asdict(training_config),
-        "data": asdict(data_config),
-        "args": vars(args),
-    }
-    if args.from_scratch:
-        config_dict["model"] = {
-            "hidden_size": args.hidden_size,
-            "num_hidden_layers": args.num_hidden_layers,
-            "num_attention_heads": args.num_attention_heads,
-            "intermediate_size": args.intermediate_size,
-            "max_position_embeddings": args.max_position_embeddings,
-        }
-    with open(config_path, "w") as f:
+    config_path_out = output_dir / "config.json"
+    config_dict = to_dict(config)
+    with open(config_path_out, "w") as f:
         json.dump(config_dict, f, indent=2)
-    logger.info(f"Configuration saved to {config_path}")
+    logger.info(f"Configuration saved to {config_path_out}")
 
     # Log configuration
-    if args.from_scratch:
+    if config.model.from_scratch:
+        arch = config.model.architecture
         logger.info("\nModel Architecture (from scratch):")
-        logger.info(f"  Hidden size: {args.hidden_size}")
-        logger.info(f"  Num layers: {args.num_hidden_layers}")
-        logger.info(f"  Num heads: {args.num_attention_heads}")
-        logger.info(f"  Intermediate size: {args.intermediate_size}")
+        logger.info(f"  Hidden size: {arch.hidden_size}")
+        logger.info(f"  Num layers: {arch.num_hidden_layers}")
+        logger.info(f"  Num heads: {arch.num_attention_heads}")
+        logger.info(f"  Intermediate size: {arch.intermediate_size}")
     else:
-        logger.info(f"\nContinue pre-training from: {args.pretrained_path}")
+        logger.info(f"\nContinue pre-training from: {config.model.pretrained_path}")
 
     logger.info("\nTraining Configuration:")
-    logger.info(f"  Max epochs: {args.max_epochs}")
-    logger.info(f"  Batch size: {args.batch_size}")
-    logger.info(f"  Learning rate: {args.learning_rate}")
-    logger.info(f"  MLM probability: {args.mlm_probability}")
+    logger.info(f"  Max epochs: {config.training.max_epochs}")
+    logger.info(f"  Batch size: {config.training.batch_size}")
+    logger.info(f"  Learning rate: {config.training.learning_rate}")
+    logger.info(f"  MLM probability: {config.data.masking.mlm_probability}")
     logger.info(SEPARATOR_LINE)
 
     # Create tokenizer and datamodule
     tokenizer = AutoTokenizer.from_pretrained(
-        args.pretrained_path, trust_remote_code=True
+        config.model.pretrained_path, trust_remote_code=config.model.trust_remote_code
     )
     datamodule = MLMDataModule(config=data_config, tokenizer=tokenizer)
 
     # Create model
     model = HELMBertMLMLightning(
-        model_name_or_path=args.pretrained_path,
-        from_scratch=args.from_scratch,
-        model_config=model_config,
+        model_name_or_path=config.model.pretrained_path,
         training_config=training_config,
-        max_epochs=args.max_epochs,
+        from_scratch=config.model.from_scratch,
+        model_config=model_config,
+        trust_remote_code=config.model.trust_remote_code,
+        use_emd=config.model.use_emd,
     )
 
     # Create callbacks and logger
-    callbacks = create_callbacks(checkpoint_dir, args.early_stopping_patience)
-    wandb_logger = None if args.disable_wandb else WandbLogger(
-        project=args.wandb_project,
-        entity=args.wandb_entity,
+    checkpoint_config = config_to_checkpoint_config(config)
+    display_config = config_to_display_config(config)
+    callbacks = create_callbacks(
+        checkpoint_dir,
+        config.training.early_stopping_patience,
+        checkpoint_config,
+        display_config,
+    )
+    wandb_logger = None if config.logging.disable_wandb else WandbLogger(
+        project=config.logging.wandb_project,
+        entity=config.logging.wandb_entity,
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
@@ -243,19 +173,19 @@ def main():
 
     # Create trainer
     trainer = L.Trainer(
-        devices=args.devices,
-        precision=args.precision,
-        max_epochs=args.max_epochs,
+        devices=config.hardware.devices,
+        precision=config.hardware.precision,
+        max_epochs=config.training.max_epochs,
         callbacks=callbacks,
         logger=wandb_logger,
-        gradient_clip_val=args.gradient_clip_val,
-        deterministic=True,
+        gradient_clip_val=config.training.gradient_clip_val,
+        deterministic=config.trainer.deterministic,
         default_root_dir=output_dir,
-        log_every_n_steps=10,
+        log_every_n_steps=config.trainer.log_every_n_steps,
     )
 
     # Train
-    mode_msg = f"MLM training ({'from scratch' if args.from_scratch else f'from {args.pretrained_path}'})"
+    mode_msg = f"MLM training ({'from scratch' if config.model.from_scratch else f'from {config.model.pretrained_path}'})"
     log_training_start(logger, mode_msg)
     trainer.fit(model, datamodule)
 
@@ -266,7 +196,7 @@ def main():
     model = load_best_checkpoint(trainer, HELMBertMLMLightning, strict=True)
 
     # Save model in HuggingFace format
-    hf_checkpoint_dir = Path(args.checkpoint_dir) / "helmbert-base"
+    hf_checkpoint_dir = Path(config.paths.checkpoint_dir) / config.paths.hf_checkpoint_name
     hf_checkpoint_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(hf_checkpoint_dir))
     tokenizer.save_pretrained(str(hf_checkpoint_dir))

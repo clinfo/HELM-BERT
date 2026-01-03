@@ -1,24 +1,22 @@
 #!/usr/bin/env python
 """Permeability regression training script.
 
-Example:
+Usage:
     python scripts/train_permeability.py
-    python scripts/train_permeability.py --pretrained_path ./checkpoints/helmbert-base
-    python scripts/train_permeability.py --freeze_encoder --head_lr 1e-3
+    python scripts/train_permeability.py --config configs/permeability.yaml
+    python scripts/train_permeability.py model.freeze_encoder=true training.batch_size=64
+    python scripts/train_permeability.py --batch_size 64 --freeze_encoder true
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
 import time
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-# Minimal environment setup before ML library imports
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -29,11 +27,13 @@ from lightning.pytorch.loggers import WandbLogger
 from transformers import AutoTokenizer
 
 from scripts.training_utils import (
-    DEFAULT_MODEL,
     SEPARATOR_LINE,
+    config_to_checkpoint_config,
+    config_to_display_config,
     create_callbacks,
     create_output_dirs,
     load_best_checkpoint,
+    load_config,
     log_completion,
     log_header,
     log_summary,
@@ -41,165 +41,103 @@ from scripts.training_utils import (
     mark_completion,
     setup_logging,
     setup_training_env,
+    to_dict,
 )
-from src.datamodules import PermeabilityDataConfig, PermeabilityDataModule
+from src.datamodules import PermeabilityDataModule, PermeabilityDataConfig
 from src.models.permeability_lightning import (
     HELMBertPermeabilityLightning,
     PermeabilityTrainingConfig,
 )
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Permeability Regression Training")
-
-    # Output
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="./outputs/permeability",
-        help="Output directory",
-    )
-    parser.add_argument(
-        "--results_dir",
-        type=str,
-        default="./results/permeability",
-        help="Directory to save results",
-    )
-
-    # Model
-    parser.add_argument(
-        "--pretrained_path",
-        type=str,
-        default=DEFAULT_MODEL,
-        help="HuggingFace Hub model ID or local path",
-    )
-    parser.add_argument("--freeze_encoder", action="store_true",
-                        help="Freeze encoder weights")
-    parser.add_argument("--finetune_encoder", dest="freeze_encoder", action="store_false",
-                        help="Finetune encoder weights")
-    parser.set_defaults(freeze_encoder=False)
-    parser.add_argument("--classifier_dropout", type=float, default=0.1)
-    parser.add_argument("--classifier_num_layers", type=int, default=2)
-
-    # Training
-    parser.add_argument("--max_epochs", type=int, default=200)
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--encoder_lr", type=float, default=3e-5)
-    parser.add_argument("--head_lr", type=float, default=1e-4)
-    parser.add_argument("--weight_decay", type=float, default=0.01)
-    parser.add_argument("--early_stopping_patience", type=int, default=20)
-    parser.add_argument("--gradient_clip_val", type=float, default=1.0)
-
-    # Data
-    parser.add_argument(
-        "--train_file",
-        type=str,
-        default="./data/downstream/cycpeptmpdb_permeability_train.csv",
-    )
-    parser.add_argument(
-        "--test_file",
-        type=str,
-        default="./data/downstream/cycpeptmpdb_permeability_test.csv",
-    )
-    parser.add_argument("--helm_column", type=str, default="HELM")
-    parser.add_argument("--target_column", type=str, default="Permeability")
-    parser.add_argument("--val_ratio", type=float, default=0.1)
-    parser.add_argument("--num_workers", type=int, default=8)
-
-    # Hardware
-    parser.add_argument("--devices", type=int, default=1)
-    parser.add_argument(
-        "--precision",
-        type=str,
-        default="32-true",
-        choices=["32-true", "16-mixed", "bf16-mixed"],
-    )
-    parser.add_argument("--seed", type=int, default=42)
-
-    # Logging
-    parser.add_argument("--wandb_project", type=str, default="helmbert-permeability")
-    parser.add_argument("--wandb_entity", type=str, default=None)
-    parser.add_argument("--disable_wandb", action="store_true")
-
-    return parser.parse_args()
-
-
 def main():
     """Main training function."""
     start_time = time.time()
-    args = parse_args()
+
+    # Load configuration
+    config = load_config(task="permeability")
 
     # Setup environment
-    setup_training_env(args.seed)
+    setup_training_env(config.training.seed, config.trainer.float32_matmul_precision)
 
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_name = f"permeability_{timestamp}"
-    output_dir, checkpoint_dir = create_output_dirs(Path(args.output_dir), run_name)
+    output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     # Setup logging
     logger = setup_logging(output_dir, timestamp, "train_permeability")
     log_header(logger, "Permeability Regression Training")
 
-    # Create configurations
+    # Create training config
     training_config = PermeabilityTrainingConfig(
-        encoder_lr=args.encoder_lr,
-        head_lr=args.head_lr,
-        weight_decay=args.weight_decay,
-        freeze_encoder=args.freeze_encoder,
-        classifier_dropout=args.classifier_dropout,
-        classifier_num_layers=args.classifier_num_layers,
+        encoder_lr=config.training.encoder_lr,
+        head_lr=config.training.head_lr,
+        weight_decay=config.training.weight_decay,
+        freeze_encoder=config.model.freeze_encoder,
+        max_epochs=config.training.max_epochs,
+        early_stopping_patience=config.training.early_stopping_patience,
+        classifier_dropout=config.model.classifier.dropout,
+        classifier_num_layers=config.model.classifier.num_layers,
+        encoder_attribute_name=config.model.encoder_attribute_name,
     )
 
+    # Create data config
     data_config = PermeabilityDataConfig(
-        train_file=args.train_file,
-        test_file=args.test_file,
-        helm_column=args.helm_column,
-        target_column=args.target_column,
-        val_ratio=args.val_ratio,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
+        train_file=config.data.train_file,
+        test_file=config.data.test_file,
+        helm_column=config.data.helm_column,
+        target_column=config.data.target_column,
+        val_ratio=config.data.val_ratio,
+        batch_size=config.training.batch_size,
+        max_seq_length=config.data.max_seq_length,
+        num_workers=config.data.num_workers,
+        pin_memory=config.data.pin_memory,
+        seed=config.training.seed,
     )
 
     # Save configurations
-    config_path = output_dir / "config.json"
-    config_dict = {
-        "training": asdict(training_config),
-        "data": asdict(data_config),
-        "args": vars(args),
-    }
-    with open(config_path, "w") as f:
+    config_path_out = output_dir / "config.json"
+    config_dict = to_dict(config)
+    with open(config_path_out, "w") as f:
         json.dump(config_dict, f, indent=2)
-    logger.info(f"Configuration saved to {config_path}")
+    logger.info(f"Configuration saved to {config_path_out}")
 
     # Log configuration
-    logger.info(f"\nPretrained model: {args.pretrained_path}")
-    logger.info(f"Freeze encoder: {args.freeze_encoder}")
+    logger.info(f"\nPretrained model: {config.model.pretrained_path}")
+    logger.info(f"Freeze encoder: {config.model.freeze_encoder}")
     logger.info("\nTraining Configuration:")
-    logger.info(f"  Max epochs: {args.max_epochs}")
-    logger.info(f"  Batch size: {args.batch_size}")
-    logger.info(f"  Encoder LR: {args.encoder_lr}")
-    logger.info(f"  Head LR: {args.head_lr}")
+    logger.info(f"  Max epochs: {config.training.max_epochs}")
+    logger.info(f"  Batch size: {config.training.batch_size}")
+    logger.info(f"  Encoder LR: {config.training.encoder_lr}")
+    logger.info(f"  Head LR: {config.training.head_lr}")
     logger.info(SEPARATOR_LINE)
 
     # Create tokenizer and datamodule
     tokenizer = AutoTokenizer.from_pretrained(
-        args.pretrained_path, trust_remote_code=True
+        config.model.pretrained_path, trust_remote_code=config.model.trust_remote_code
     )
     datamodule = PermeabilityDataModule(config=data_config, tokenizer=tokenizer)
 
     # Create model
     model = HELMBertPermeabilityLightning(
-        model_name_or_path=args.pretrained_path,
+        model_name_or_path=config.model.pretrained_path,
         training_config=training_config,
+        trust_remote_code=config.model.trust_remote_code,
     )
 
     # Create callbacks and logger
-    callbacks = create_callbacks(checkpoint_dir, args.early_stopping_patience)
-    wandb_logger = None if args.disable_wandb else WandbLogger(
-        project=args.wandb_project,
-        entity=args.wandb_entity,
+    checkpoint_config = config_to_checkpoint_config(config)
+    display_config = config_to_display_config(config)
+    callbacks = create_callbacks(
+        checkpoint_dir,
+        config.training.early_stopping_patience,
+        checkpoint_config,
+        display_config,
+    )
+    wandb_logger = None if config.logging.disable_wandb else WandbLogger(
+        project=config.logging.wandb_project,
+        entity=config.logging.wandb_entity,
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
@@ -207,15 +145,15 @@ def main():
 
     # Create trainer
     trainer = L.Trainer(
-        devices=args.devices,
-        precision=args.precision,
-        max_epochs=args.max_epochs,
+        devices=config.hardware.devices,
+        precision=config.hardware.precision,
+        max_epochs=config.training.max_epochs,
         callbacks=callbacks,
         logger=wandb_logger,
-        gradient_clip_val=args.gradient_clip_val,
-        deterministic=True,
+        gradient_clip_val=config.training.gradient_clip_val,
+        deterministic=config.trainer.deterministic,
         default_root_dir=output_dir,
-        log_every_n_steps=10,
+        log_every_n_steps=config.trainer.log_every_n_steps,
     )
 
     # Train
@@ -233,7 +171,7 @@ def main():
         logger.warning("No test dataset found, skipping evaluation")
     else:
         # Prepare results directory
-        results_dir = Path(args.results_dir)
+        results_dir = Path(config.paths.results_dir)
         results_dir.mkdir(parents=True, exist_ok=True)
 
         # Get predictions (vectorized)

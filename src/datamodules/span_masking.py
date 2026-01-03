@@ -6,7 +6,7 @@ Reference:
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Set, Tuple
+from typing import List, Set, Tuple
 
 import numpy as np
 import torch
@@ -14,15 +14,19 @@ import torch
 
 @dataclass
 class SpanMaskingConfig:
-    """Configuration for span masking."""
+    """Configuration for span masking.
 
-    mlm_probability: float = 0.15
-    mask_ratio: float = 0.8
-    random_ratio: float = 0.1
-    keep_ratio: float = 0.1
-    min_span_length: int = 1
-    max_span_length: int = 5
-    geometric_p: float = 0.2
+    All fields are required - values come from YAML configuration.
+    """
+
+    mlm_probability: float
+    mask_ratio: float
+    random_ratio: float
+    keep_ratio: float
+    min_span_length: int
+    max_span_length: int
+    geometric_p: float
+    ignore_index: int
 
 
 class SpanMasking:
@@ -30,36 +34,29 @@ class SpanMasking:
 
     def __init__(
         self,
-        config: Optional[SpanMaskingConfig] = None,
-        mask_token_id: int = 4,
-        vocab_size: int = 78,
-        special_token_ids: Optional[Set[int]] = None,
+        config: SpanMaskingConfig,
+        mask_token_id: int,
+        vocab_size: int,
+        special_token_ids: Set[int],
     ):
         """Initialize span masking strategy.
 
         Args:
-            config: SpanMaskingConfig object
-            mask_token_id: Token ID for MASK token
-            vocab_size: Size of vocabulary
-            special_token_ids: Set of special token IDs that should not be masked
+            config: SpanMaskingConfig object (required)
+            mask_token_id: Token ID for MASK token (required)
+            vocab_size: Size of vocabulary (required)
+            special_token_ids: Set of special token IDs that should not be masked (required)
         """
-        if config is None:
-            config = SpanMaskingConfig()
-
         self.max_span_length = config.max_span_length
         self.min_span_length = config.min_span_length
         self.geometric_p = config.geometric_p
         self.mlm_probability = config.mlm_probability
         self.mask_token_prob = config.mask_ratio
         self.random_token_prob = config.random_ratio
+        self.ignore_index = config.ignore_index
         self.mask_token_id = mask_token_id
         self.vocab_size = vocab_size
-
-        # Special tokens (never masked): PAD=0, BOS=1, SEP=2, UNK=3, MASK=4, $=32
-        if special_token_ids is None:
-            self.special_tokens = {0, 1, 2, 3, 4, 32}
-        else:
-            self.special_tokens = special_token_ids
+        self.special_tokens = special_token_ids
 
         # Pre-compute maskable tokens for random replacement
         maskable_ids = set(range(vocab_size)) - self.special_tokens
@@ -119,7 +116,7 @@ class SpanMasking:
         self, input_ids: torch.Tensor, spans: List[Tuple[int, int]]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Apply 80/10/10 masking rule to selected spans."""
-        labels = torch.full_like(input_ids, -100)
+        labels = torch.full_like(input_ids, self.ignore_index)
         masked_input_ids = input_ids.clone()
 
         for start, end in spans:
@@ -174,7 +171,7 @@ class SpanMasking:
 
             if not valid_starts:
                 all_masked_input_ids.append(input_ids[i])
-                all_labels.append(torch.full_like(input_ids[i], -100))
+                all_labels.append(torch.full_like(input_ids[i], self.ignore_index))
                 continue
 
             num_to_mask = max(1, int(len(valid_starts) * self.mlm_probability))
