@@ -71,13 +71,7 @@ class HELMGLaMLightning(L.LightningModule):
         self.drug_model_path = drug_model_path
         self.trust_remote_code = trust_remote_code
 
-        self.save_hyperparameters(
-            {
-                "encoder_lr": self.training_config.encoder_lr,
-                "head_lr": self.training_config.head_lr,
-                "drug_model_path": self.drug_model_path,
-            }
-        )
+        self.save_hyperparameters()
 
         # Task configuration
         self.num_classes = self.training_config.num_classes
@@ -260,42 +254,43 @@ class HELMGLaMLightning(L.LightningModule):
         self,
         predictions: torch.Tensor,
         labels: torch.Tensor,
-        batch: Dict[str, torch.Tensor],
     ) -> torch.Tensor:
-        """Compute loss with optional sample weighting."""
+        """Compute loss."""
         labels = labels.float()
         predictions = predictions.squeeze(-1) if predictions.dim() > 1 else predictions
         labels = labels.squeeze(-1) if labels.dim() > 1 else labels
 
-        per_sample_loss = self.loss_fn(predictions, labels)
-
-        if "weight" in batch:
-            weights = batch["weight"]
-            if not isinstance(weights, torch.Tensor):
-                weights = torch.tensor(
-                    weights, device=per_sample_loss.device, dtype=per_sample_loss.dtype
-                )
-            return (per_sample_loss * weights).mean()
-
-        return per_sample_loss.mean()
+        return self.loss_fn(predictions, labels).mean()
 
     def _forward_batch(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """Forward pass with batch unpacking."""
-        return self(
-            batch.get("drug_ids"),
-            batch.get("drug_mask"),
-            batch.get("target_ids"),
-            batch.get("target_mask"),
-            batch.get("drug_embedding"),
-            batch.get("target_embedding"),
-        )
+        """Forward pass with explicit batch unpacking.
+
+        Detects mode based on batch contents:
+        - Embedding mode: drug_embedding, target_embedding present
+        - Tokenized mode: drug_ids, target_ids present
+        """
+        if "drug_embedding" in batch:
+            # Embedding mode - explicit key access
+            return self(
+                drug_embedding=batch["drug_embedding"],
+                target_embedding=batch["target_embedding"],
+            )
+        else:
+            # Tokenized mode - explicit key access
+            return self(
+                drug_ids=batch["drug_ids"],
+                drug_mask=batch["drug_mask"],
+                target_ids=batch["target_ids"],
+                target_mask=batch["target_mask"],
+            )
 
     def training_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
         """Training step."""
         predictions = self._forward_batch(batch)
-        loss = self._compute_loss(predictions, batch["label"], batch)
+        labels = batch["label"]
+        loss = self._compute_loss(predictions, labels)
 
         self.log(
             "train_loss",
@@ -303,7 +298,7 @@ class HELMGLaMLightning(L.LightningModule):
             on_step=True,
             on_epoch=True,
             prog_bar=True,
-            batch_size=batch["label"].size(0),
+            batch_size=labels.size(0),
         )
 
         return loss
@@ -314,7 +309,7 @@ class HELMGLaMLightning(L.LightningModule):
         """Validation step."""
         predictions = self._forward_batch(batch)
         labels = batch["label"]
-        loss = self._compute_loss(predictions, labels, batch)
+        loss = self._compute_loss(predictions, labels)
 
         self.log(
             "val_loss",
@@ -339,7 +334,7 @@ class HELMGLaMLightning(L.LightningModule):
         """Test step."""
         predictions = self._forward_batch(batch)
         labels = batch["label"]
-        loss = self._compute_loss(predictions, labels, batch)
+        loss = self._compute_loss(predictions, labels)
 
         self.log(
             "test_loss",

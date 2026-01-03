@@ -108,8 +108,6 @@ def main():
         cache_drug_encoder_name=config.cache.drug_encoder_name,
         cache_target_encoder_name=config.cache.target_encoder_name,
         cache_dataset_type=config.cache.dataset_type,
-        cache_drug_role=config.cache.drug_role,
-        cache_target_role=config.cache.target_role,
     )
 
     # Save configurations
