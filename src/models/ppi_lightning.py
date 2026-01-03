@@ -71,13 +71,7 @@ class HELMGLaMLightning(L.LightningModule):
         self.drug_model_path = drug_model_path
         self.trust_remote_code = trust_remote_code
 
-        self.save_hyperparameters(
-            {
-                "encoder_lr": self.training_config.encoder_lr,
-                "head_lr": self.training_config.head_lr,
-                "drug_model_path": self.drug_model_path,
-            }
-        )
+        self.save_hyperparameters()
 
         # Task configuration
         self.num_classes = self.training_config.num_classes

@@ -345,7 +345,8 @@ def load_best_checkpoint(trainer: L.Trainer, model_class, strict: bool = True):
 
     return model_class.load_from_checkpoint(
         trainer.checkpoint_callback.best_model_path,
-        strict=strict
+        strict=strict,
+        weights_only=False,
     )
 
 

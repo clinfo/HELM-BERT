@@ -91,17 +91,7 @@ class HELMBertMLMLightning(L.LightningModule):
             )
             self.model_config = self.model.config
 
-        self.save_hyperparameters(
-            {
-                "learning_rate": self.training_config.learning_rate,
-                "weight_decay": self.training_config.weight_decay,
-                "model_name_or_path": self.model_name_or_path,
-                "from_scratch": self.from_scratch,
-                "hidden_size": self.model_config.hidden_size,
-                "num_hidden_layers": self.model_config.num_hidden_layers,
-                "num_attention_heads": self.model_config.num_attention_heads,
-            }
-        )
+        self.save_hyperparameters()
 
         self._log_model_info()
 

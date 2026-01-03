@@ -61,13 +61,7 @@ class HELMBertPermeabilityLightning(L.LightningModule):
         self.model_name_or_path = model_name_or_path
         self.trust_remote_code = trust_remote_code
 
-        self.save_hyperparameters(
-            {
-                "encoder_lr": self.training_config.encoder_lr,
-                "head_lr": self.training_config.head_lr,
-                "model_name_or_path": self.model_name_or_path,
-            }
-        )
+        self.save_hyperparameters()
 
         # Load config and update for regression with MLP head
         logger.info(f"Loading model from {self.model_name_or_path}")
