@@ -13,7 +13,7 @@
 # =============================================================================
 paths:
   output_dir: ./outputs/mlm
-  data_dir: ./data/deduplicated
+  data_dir: ./data/mlm
   hf_checkpoint_name: helmbert-base
 
 # =============================================================================
