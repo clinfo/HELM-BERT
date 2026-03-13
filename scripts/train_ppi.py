@@ -105,6 +105,8 @@ def main():
         seed=config.training.seed,
         use_cached_embeddings=config.training.use_cached_embeddings,
         cache_dir=config.paths.cache_dir,
+        drug_encoder=config.model.drug_encoder.pretrained_path,
+        trust_remote_code=config.model.trust_remote_code,
         cache_drug_encoder_name=config.cache.drug_encoder_name,
         cache_target_encoder_name=config.cache.target_encoder_name,
         cache_dataset_type=config.cache.dataset_type,
