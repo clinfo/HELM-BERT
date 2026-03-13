@@ -7,7 +7,7 @@ Uses DataCollator for dynamic padding at batch level.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import lightning as L
 import numpy as np
@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer, PreTrainedTokenizer
 
 from src.utils.embedding_cache import EmbeddingCache
+from src.utils.embedding_generator import generate_drug_embeddings, generate_target_embeddings
 
 from .data_collators import DataCollatorForPPI, DataCollatorForPPIEmbedding
 from .dual_sequence_dataset import DualSequenceDataset
@@ -57,6 +58,10 @@ class PPIDataConfig:
     # Cached embeddings
     use_cached_embeddings: bool
     cache_dir: str
+
+    # Encoder paths (for auto-generation of cache)
+    drug_encoder: str
+    trust_remote_code: bool
 
     # Cache naming (for EmbeddingCache lookup)
     cache_drug_encoder_name: str
@@ -130,22 +135,60 @@ class PPIDataModule(L.LightningDataModule):
             and self.target_embeddings is not None
         )
 
+    def _get_all_unique_sequences(self) -> tuple[List[str], List[str]]:
+        """Load data files and return unique drug/target sequences."""
+        train_df = pd.read_csv(self.config.train_file)
+        drug_col, target_col = self.config.drug_column, self.config.target_column
+
+        all_drugs = set(train_df[drug_col].unique())
+        all_targets = set(train_df[target_col].unique())
+
+        test_file = Path(self.config.test_file)
+        if test_file.exists():
+            test_df = pd.read_csv(test_file)
+            all_drugs.update(test_df[drug_col].unique())
+            all_targets.update(test_df[target_col].unique())
+
+        return list(all_drugs), list(all_targets)
+
+    def prepare_data(self) -> None:
+        """Generate embedding cache if missing. Runs once on rank 0."""
+        if not self._use_cached_embeddings():
+            return
+
+        unique_drugs, unique_targets = self._get_all_unique_sequences()
+        cache = EmbeddingCache(Path(self.config.cache_dir))
+
+        generate_drug_embeddings(
+            cache=cache,
+            sequences=unique_drugs,
+            encoder_name=self.config.cache_drug_encoder_name,
+            dataset_type=self.config.cache_dataset_type,
+            pretrained_path=self.config.drug_encoder,
+            max_length=self.config.max_drug_length,
+            batch_size=self.config.batch_size,
+            trust_remote_code=self.config.trust_remote_code,
+        )
+
+        generate_target_embeddings(
+            cache=cache,
+            sequences=unique_targets,
+            encoder_name=self.config.cache_target_encoder_name,
+            dataset_type=self.config.cache_dataset_type,
+            pretrained_path=self.config.target_encoder,
+            max_length=self.config.max_target_length,
+            batch_size=self.config.batch_size,
+        )
+
+        logger.info("Embedding cache ready at: %s", self.config.cache_dir)
+
     def _load_embeddings(
         self, train_df: pd.DataFrame, test_df: Optional[pd.DataFrame]
     ) -> None:
-        """Load pre-computed embeddings if enabled."""
+        """Load pre-computed embeddings from cache."""
         if not self._use_cached_embeddings():
-            logger.info("Cached embeddings disabled (use_cached_embeddings=false)")
             return
 
-        cache_dir = Path(self.config.cache_dir)
-        if not cache_dir.exists():
-            raise FileNotFoundError(
-                f"Cache directory not found: {cache_dir}. "
-                "Run generate_ppi_embeddings.py first."
-            )
-
-        # Get all unique sequences
         drug_col = self.config.drug_column
         target_col = self.config.target_column
 
@@ -155,9 +198,8 @@ class PPIDataModule(L.LightningDataModule):
             all_drugs.update(test_df[drug_col].unique())
             all_targets.update(test_df[target_col].unique())
 
-        embedding_cache = EmbeddingCache(cache_dir)
+        embedding_cache = EmbeddingCache(Path(self.config.cache_dir))
 
-        # Load drug embeddings
         logger.info(f"Loading drug embeddings ({self.config.cache_drug_encoder_name})...")
         self.drug_embeddings = embedding_cache.load_embeddings(
             encoder_name=self.config.cache_drug_encoder_name,
@@ -167,7 +209,6 @@ class PPIDataModule(L.LightningDataModule):
         )
         logger.info(f"Loaded {len(self.drug_embeddings)} drug embeddings")
 
-        # Load target embeddings
         logger.info(f"Loading target embeddings ({self.config.cache_target_encoder_name})...")
         self.target_embeddings = embedding_cache.load_embeddings(
             encoder_name=self.config.cache_target_encoder_name,
