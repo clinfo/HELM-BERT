@@ -54,7 +54,6 @@ class PPITrainingConfig:
     esm_hidden_sizes: Dict[str, int]
     prediction_threshold: float
     evidence_lambda_coeff: float
-    evidence_annealing_epochs: int
 
 
 class HELMGLaMLightning(L.LightningModule):
@@ -268,20 +267,12 @@ class HELMGLaMLightning(L.LightningModule):
                 return sum_embeddings / sum_mask
             return hidden_states.mean(dim=1)
 
-    def _annealed_lambda(self) -> float:
-        """Compute annealed evidence regularization coefficient."""
-        annealing_coeff = min(
-            1.0,
-            self.current_epoch / max(1, self.training_config.evidence_annealing_epochs),
-        )
-        return annealing_coeff * self.training_config.evidence_lambda_coeff
-
     def _compute_loss(
         self,
         outputs: Dict[str, torch.Tensor],
         labels: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute Dirichlet evidential loss with annealed KL regularization."""
+        """Compute Dirichlet evidential loss with fixed KL regularization."""
         labels_flat = labels.float()
         labels_flat = labels_flat.squeeze(-1) if labels_flat.dim() > 1 else labels_flat
         y_onehot = F.one_hot(labels_flat.long(), num_classes=self.num_classes).float()
@@ -289,7 +280,7 @@ class HELMGLaMLightning(L.LightningModule):
         return dirichlet_loss(
             y_onehot=y_onehot,
             alpha=outputs["alpha"],
-            lambda_coeff=self._annealed_lambda(),
+            lambda_coeff=self.training_config.evidence_lambda_coeff,
         )
 
     def _forward_batch(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -322,7 +313,6 @@ class HELMGLaMLightning(L.LightningModule):
         batch_size = labels.size(0)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
-        self.log("evidence_lambda", self._annealed_lambda(), on_step=False, on_epoch=True, batch_size=batch_size)
 
         return loss
 

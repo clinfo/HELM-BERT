@@ -86,7 +86,6 @@ def main():
         esm_hidden_sizes=esm_hidden_sizes,
         prediction_threshold=config.classification.prediction_threshold,
         evidence_lambda_coeff=config.evidence.lambda_coeff,
-        evidence_annealing_epochs=config.evidence.annealing_epochs,
     )
 
     # Create data config

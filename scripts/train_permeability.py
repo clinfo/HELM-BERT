@@ -81,7 +81,6 @@ def main():
         classifier_num_layers=config.model.classifier.num_layers,
         encoder_attribute_name=config.model.encoder_attribute_name,
         evidence_lambda_coeff=config.evidence.lambda_coeff,
-        evidence_annealing_epochs=config.evidence.annealing_epochs,
     )
 
     # Create data config

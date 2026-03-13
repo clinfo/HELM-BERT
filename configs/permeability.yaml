@@ -60,15 +60,14 @@ batch_keys:
 # =============================================================================
 evidence:
   lambda_coeff: 0.05
-  annealing_epochs: 50
 
 # =============================================================================
 # Checkpoint
 # =============================================================================
 checkpoint:
-  monitor: val_rmse
+  monitor: val_loss
   mode: min
-  filename_pattern: "{epoch}-{val_rmse:.4f}"
+  filename_pattern: "{epoch}-{val_loss:.4f}"
   save_top_k: 10
   save_last: true
 

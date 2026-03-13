@@ -46,7 +46,6 @@ class PermeabilityTrainingConfig:
     classifier_num_layers: int
     encoder_attribute_name: str
     evidence_lambda_coeff: float
-    evidence_annealing_epochs: int
 
 
 class HELMBertPermeabilityLightning(L.LightningModule):
@@ -164,18 +163,10 @@ class HELMBertPermeabilityLightning(L.LightningModule):
             },
         }
 
-    def _annealed_lambda(self) -> float:
-        """Compute annealed evidence regularization coefficient."""
-        annealing_coeff = min(
-            1.0,
-            self.current_epoch / max(1, self.training_config.evidence_annealing_epochs),
-        )
-        return annealing_coeff * self.training_config.evidence_lambda_coeff
-
     def _compute_loss(
         self, outputs: Dict[str, Any], targets: torch.Tensor
     ) -> torch.Tensor:
-        """Compute NIG evidential loss with annealed regularization."""
+        """Compute NIG evidential loss with fixed regularization."""
         params = outputs["evidence_params"]
         targets_flat = targets.squeeze(-1) if targets.dim() > 1 else targets
 
@@ -185,7 +176,7 @@ class HELMBertPermeabilityLightning(L.LightningModule):
             nu=params["nu"],
             alpha=params["alpha"],
             beta=params["beta"],
-            lambda_coeff=self._annealed_lambda(),
+            lambda_coeff=self.training_config.evidence_lambda_coeff,
         )
 
     def training_step(self, batch: Dict[str, Any], batch_idx: int) -> torch.Tensor:
@@ -197,7 +188,6 @@ class HELMBertPermeabilityLightning(L.LightningModule):
         batch_size = targets.size(0)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
-        self.log("evidence_lambda", self._annealed_lambda(), on_step=False, on_epoch=True, batch_size=batch_size)
 
         return loss
 
