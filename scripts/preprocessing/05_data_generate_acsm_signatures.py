@@ -25,6 +25,7 @@ from typing import Dict, List, Tuple, Optional
 import contextlib
 import io
 import argparse
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # Safe tqdm import
 try:
@@ -196,28 +197,22 @@ def process_complex(row: pd.Series, complex_dir: Path) -> Optional[Dict]:
     return None
 
 
-def process_batch(batch_df: pd.DataFrame, complex_dir: Path) -> Tuple[List[Dict], List[str]]:
-    """Process a batch of complexes.
-    
-    Args:
-        batch_df: DataFrame with batch of complexes
-        complex_dir: Directory containing complex PDB files
-        
-    Returns:
-        Tuple of (list of complex signature results, list of failed PDB IDs)
-    """
-    results = []
-    failed_pdbs = []
-    
-    for idx, row in batch_df.iterrows():
-        result = process_complex(row, complex_dir)
-        
-        if result is not None:
-            results.append(result)
-        else:
-            failed_pdbs.append(row[PDB_COL])
-    
-    return results, failed_pdbs
+def _worker(args: Tuple) -> Optional[Dict]:
+    """Worker function for parallel processing."""
+    pdb_id, peptide_chain, protein_chain, complex_file, complex_dir = args
+    pdb_file = Path(complex_dir) / complex_file
+    if not pdb_file.exists():
+        return None
+    sig = generate_complex_signature(pdb_file)
+    if sig is not None:
+        return {
+            'pdb_id': pdb_id,
+            'peptide_chain': peptide_chain,
+            'protein_chain': protein_chain,
+            'complex_file': complex_file,
+            'signature': sig,
+        }
+    return None
 
 
 def save_signatures(signatures: List[Dict], output_file: Path):
@@ -259,6 +254,8 @@ def main():
     parser.add_argument('--output-dir', type=str, default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument('--log-dir', type=str, default=str(DEFAULT_LOG_DIR))
     parser.add_argument('--signa-path', type=str, default=str(SIGNA_PATH_DEFAULT))
+    parser.add_argument('--workers', type=int, default=min(32, os.cpu_count() or 4),
+                        help='Number of parallel workers')
     args = parser.parse_args()
 
     # Adjust signa path if overridden
@@ -298,31 +295,33 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Process complexes in batches
+    # Build work items (deterministic order from sorted unique_complexes)
+    complex_dir = Path(args.complex_dir)
+    work_items = [
+        (row[PDB_COL], row[PEPTIDE_CHAIN_COL], row[PROTEIN_CHAIN_COL],
+         row[COMPLEX_FILE_COL], str(complex_dir))
+        for _, row in unique_complexes.iterrows()
+    ]
+
     all_complex_sigs = []
     all_failed_pdbs = []
-    
-    complex_dir = Path(args.complex_dir)
-    
-    # Process with progress bar
-    n_batches = (len(unique_complexes) + BATCH_SIZE - 1) // BATCH_SIZE
-    
-    with tqdm(total=len(unique_complexes), desc="Processing complexes") as pbar:
-        for i in range(0, len(unique_complexes), BATCH_SIZE):
-            batch_df = unique_complexes.iloc[i:i+BATCH_SIZE]
-            
-            # Process batch
-            results, failed_pdbs = process_batch(batch_df, complex_dir)
-            
-            # Collect results
-            all_complex_sigs.extend(results)
-            all_failed_pdbs.extend(failed_pdbs)
-            
-            # Log failures immediately
-            if failed_pdbs:
-                logger.warning(f"Failed to generate signatures for {len(failed_pdbs)} complexes in this batch: {failed_pdbs[:5]}..." if len(failed_pdbs) > 5 else f"Failed to generate signatures for {len(failed_pdbs)} complexes: {failed_pdbs}")
-            
-            pbar.update(len(batch_df))
+
+    logger.info(f"Processing with {args.workers} parallel workers")
+
+    with ProcessPoolExecutor(max_workers=args.workers) as executor:
+        futures = {executor.submit(_worker, item): item for item in work_items}
+        with tqdm(total=len(futures), desc="Processing complexes") as pbar:
+            for future in as_completed(futures):
+                item = futures[future]
+                result = future.result()
+                if result is not None:
+                    all_complex_sigs.append(result)
+                else:
+                    all_failed_pdbs.append(item[0])
+                pbar.update(1)
+
+    # Sort results by pdb_id for deterministic output
+    all_complex_sigs.sort(key=lambda x: (x['pdb_id'], x['peptide_chain'], x['protein_chain']))
     
     # Save results
     logger.info("Saving signatures...")
