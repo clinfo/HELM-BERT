@@ -37,8 +37,9 @@ uv pip install -r requirements.txt
 # Permeability prediction
 python scripts/train_permeability.py
 
-# PPI classification
-python scripts/train_ppi.py
+# PPI classification (choose split)
+python scripts/train_ppi.py --config configs/ppi_random.yaml
+python scripts/train_ppi.py --config configs/ppi_acsm.yaml
 ```
 
 Override settings: `--batch_size 64 --lr 1e-4` or `--config custom.yaml`
@@ -122,26 +123,17 @@ python scripts/train_permeability.py --train_file ./data/train.csv --test_file .
 Uses HELM-BERT (peptide) + ESM-2 (protein) dual encoder architecture.
 
 ```bash
-# Default (both encoders frozen)
-python scripts/train_ppi.py
+# Random split
+python scripts/train_ppi.py --config configs/ppi_random.yaml
+
+# aCSM split
+python scripts/train_ppi.py --config configs/ppi_acsm.yaml
 
 # Fine-tune drug encoder (unfreeze)
-python scripts/train_ppi.py --freeze_drug_encoder false
-
-# Fine-tune both encoders (unfreeze)
-python scripts/train_ppi.py --freeze_drug_encoder false --freeze_target_encoder false --encoder_lr 1e-5
-
-# Use cached embeddings (faster training)
-python scripts/train_ppi.py --use_cached_embeddings
-
-# Use local checkpoint
-python scripts/train_ppi.py --pretrained ./checkpoints/my-model
-
-# Custom data
-python scripts/train_ppi.py --train_file ./data/train.csv --test_file ./data/test.csv
+python scripts/train_ppi.py --config configs/ppi_random.yaml --freeze_drug_encoder false
 ```
 
-**Key configuration options** (`configs/ppi.yaml`):
+**Key configuration options** (`configs/ppi.yaml` + `configs/ppi_random.yaml` or `configs/ppi_acsm.yaml`):
 
 | Config Key | Default | Description |
 |------------|---------|-------------|

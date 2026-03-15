@@ -1,12 +1,12 @@
 # =============================================================================
-# HELM-BERT PPI (Peptide-Protein Interaction) Configuration
+# HELM-BERT PPI (Peptide-Protein Interaction) Base Configuration
 # =============================================================================
-# Inherits common settings from default.yaml.
-# Contains ALL PPI-specific settings.
+# Shared settings for all PPI experiments.
+# Do not use directly — use ppi_random.yaml or ppi_acsm.yaml instead.
 #
 # Usage:
-#   python scripts/train_ppi.py
-#   python scripts/train_ppi.py training.use_cached_embeddings=true
+#   python scripts/train_ppi.py --config configs/ppi_random.yaml
+#   python scripts/train_ppi.py --config configs/ppi_acsm.yaml
 
 # =============================================================================
 # Paths
@@ -49,8 +49,6 @@ training:
 # Data
 # =============================================================================
 data:
-  train_file: ./data/downstream/propedia_ppi_train.csv
-  test_file: ./data/downstream/propedia_ppi_test.csv
   drug_column: Peptide_HELM
   target_column: Receptor_Sequence
   label_column: Label

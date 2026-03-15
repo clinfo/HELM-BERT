@@ -53,6 +53,11 @@ def main():
     start_time = time.time()
 
     # Load configuration
+    if "--config" not in sys.argv:
+        print("Error: --config is required for PPI training.")
+        print("  python scripts/train_ppi.py --config configs/ppi_random.yaml")
+        print("  python scripts/train_ppi.py --config configs/ppi_acsm.yaml")
+        sys.exit(1)
     config = load_config(task="ppi")
 
     # Setup environment
@@ -60,7 +65,7 @@ def main():
 
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"ppi_{timestamp}"
+    run_name = f"ppi_{config.data.split_name}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     # Setup logging
