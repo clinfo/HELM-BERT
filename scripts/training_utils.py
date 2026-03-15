@@ -111,13 +111,12 @@ def load_config(task: str, argv: List[str] = None) -> DictConfig:
     if default_path.exists():
         configs.append(OmegaConf.load(default_path))
 
-    # Load task or custom config
+    # Load task config, then optional override config
+    task_path = CONFIG_DIR / f"{task}.yaml"
+    if task_path.exists():
+        configs.append(OmegaConf.load(task_path))
     if config_file:
         configs.append(OmegaConf.load(config_file))
-    else:
-        task_path = CONFIG_DIR / f"{task}.yaml"
-        if task_path.exists():
-            configs.append(OmegaConf.load(task_path))
 
     # Merge base configs
     config = OmegaConf.merge(*configs) if configs else OmegaConf.create()

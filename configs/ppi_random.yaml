@@ -1,0 +1,9 @@
+# =============================================================================
+# PPI - Random Split
+# =============================================================================
+# Usage: python scripts/train_ppi.py --config configs/ppi_random.yaml
+
+data:
+  split_name: random
+  train_file: ./data/downstream/propedia_ppi_random_train.csv
+  test_file: ./data/downstream/propedia_ppi_random_test.csv
