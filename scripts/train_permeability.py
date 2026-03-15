@@ -142,6 +142,7 @@ def main():
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
+        tags=["permeability", "downstream", "regression", "evidential", config.data.split_name] + (config.logging.tags or []),
     )
 
     # Create trainer
