@@ -67,7 +67,7 @@ def main():
 
     # Setup logging
     logger = setup_logging(output_dir, timestamp, "train_permeability")
-    log_header(logger, "Permeability Regression Training")
+    log_header(logger, "Permeability Evidential Regression Training")
 
     # Create training config
     training_config = PermeabilityTrainingConfig(
@@ -80,6 +80,7 @@ def main():
         classifier_dropout=config.model.classifier.dropout,
         classifier_num_layers=config.model.classifier.num_layers,
         encoder_attribute_name=config.model.encoder_attribute_name,
+        evidence_lambda_coeff=config.evidence.lambda_coeff,
     )
 
     # Create data config
@@ -174,13 +175,20 @@ def main():
         results_dir = Path(config.paths.results_dir)
         results_dir.mkdir(parents=True, exist_ok=True)
 
-        # Get predictions (vectorized)
+        # Get predictions with uncertainty (vectorized)
         predictions_output = trainer.predict(model, dataloaders=datamodule.test_dataloader())
         predictions = np.concatenate([b["predictions"].cpu().numpy() for b in predictions_output]).flatten()
         targets = np.concatenate([b["targets"].cpu().numpy() for b in predictions_output]).flatten()
+        aleatoric = np.concatenate([b["uncertainty"]["aleatoric"].cpu().numpy() for b in predictions_output]).flatten()
+        epistemic = np.concatenate([b["uncertainty"]["epistemic"].cpu().numpy() for b in predictions_output]).flatten()
 
-        # Save predictions
-        pred_df = pd.DataFrame({"pred": predictions, "actual": targets})
+        # Save predictions with uncertainty
+        pred_df = pd.DataFrame({
+            "pred": predictions,
+            "actual": targets,
+            "aleatoric_uncertainty": aleatoric,
+            "epistemic_uncertainty": epistemic,
+        })
         pred_file = results_dir / f"predictions_{run_name}.csv"
         pred_df.to_csv(pred_file, index=False)
         logger.info(f"Saved predictions to {pred_file}")

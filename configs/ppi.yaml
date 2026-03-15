@@ -30,11 +30,10 @@ model:
     pretrained_path: facebook/esm2_t33_650M_UR50D
     freeze: true
 
-  # MLP head
+  # MLP head (Dirichlet: K=2 for binary classification)
   head:
     dropout: 0.1
-    num_classes: 1
-    pos_weight: 4.0
+    num_classes: 2
 
 # =============================================================================
 # Training
@@ -99,6 +98,22 @@ cache:
 # =============================================================================
 classification:
   prediction_threshold: 0.5
+
+# =============================================================================
+# Evidential Deep Learning (Dirichlet classification)
+# =============================================================================
+evidence:
+  lambda_coeff: 0.05
+
+# =============================================================================
+# Checkpoint
+# =============================================================================
+checkpoint:
+  monitor: val_loss
+  mode: min
+  filename_pattern: "{epoch}-{val_loss:.4f}"
+  save_top_k: 10
+  save_last: true
 
 # =============================================================================
 # Logging

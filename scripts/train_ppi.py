@@ -70,7 +70,7 @@ def main():
 
     # Setup logging
     logger = setup_logging(output_dir, timestamp, "train_ppi")
-    log_header(logger, "PPI Classification Training")
+    log_header(logger, "PPI Evidential Classification Training")
 
     # Convert esm_hidden_sizes to dict
     esm_hidden_sizes = OmegaConf.to_container(config.esm_hidden_sizes, resolve=True)
@@ -84,13 +84,13 @@ def main():
         early_stopping_patience=config.training.early_stopping_patience,
         mlp_dropout=config.model.head.dropout,
         num_classes=config.model.head.num_classes,
-        pos_weight=config.model.head.pos_weight,
         freeze_drug_encoder=config.model.drug_encoder.freeze,
         freeze_target_encoder=config.model.target_encoder.freeze,
         use_cached_embeddings=config.training.use_cached_embeddings,
         target_encoder=config.model.target_encoder.pretrained_path,
         esm_hidden_sizes=esm_hidden_sizes,
         prediction_threshold=config.classification.prediction_threshold,
+        evidence_lambda_coeff=config.evidence.lambda_coeff,
     )
 
     # Create data config
@@ -199,21 +199,22 @@ def main():
         results_dir = Path(config.paths.results_dir)
         results_dir.mkdir(parents=True, exist_ok=True)
 
-        # Get predictions (vectorized)
+        # Get predictions with uncertainty (vectorized)
         predictions_output = trainer.predict(model, dataloaders=datamodule.test_dataloader())
-        predictions = np.concatenate([b["predictions"].cpu().numpy() for b in predictions_output]).flatten()
+        probs = np.concatenate([b["predictions"].cpu().numpy() for b in predictions_output]).flatten()
         targets = np.concatenate([b["targets"].cpu().numpy() for b in predictions_output]).flatten()
+        uncertainty = np.concatenate([b["uncertainty"].cpu().numpy() for b in predictions_output]).flatten()
 
-        # Compute probabilities and labels (vectorized)
+        # Dirichlet probabilities are already in [0, 1] — no sigmoid needed
         threshold = config.classification.prediction_threshold
-        probs = 1 / (1 + np.exp(-predictions))
         pred_labels = (probs >= threshold).astype(int)
 
-        # Save predictions
+        # Save predictions with uncertainty
         pred_df = pd.DataFrame({
             "pred_prob": probs,
             "pred_label": pred_labels,
             "actual": targets.astype(int),
+            "uncertainty": uncertainty,
         })
         pred_file = results_dir / f"predictions_{run_name}.csv"
         pred_df.to_csv(pred_file, index=False)
