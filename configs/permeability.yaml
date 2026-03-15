@@ -72,9 +72,9 @@ evidence:
 # Checkpoint
 # =============================================================================
 checkpoint:
-  monitor: val_loss
+  monitor: val_mse
   mode: min
-  filename_pattern: "{epoch}-{val_loss:.4f}"
+  filename_pattern: "{epoch}-{val_mse:.4f}"
   save_top_k: 10
   save_last: true
 
