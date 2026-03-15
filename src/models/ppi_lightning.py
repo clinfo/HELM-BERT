@@ -272,14 +272,18 @@ class HELMGLaMLightning(L.LightningModule):
         outputs: Dict[str, torch.Tensor],
         labels: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute loss."""
-        labels = labels.float()
-        predictions = predictions.squeeze(-1) if predictions.dim() > 1 else predictions
-        labels = labels.squeeze(-1) if labels.dim() > 1 else labels
+        """Compute Dirichlet evidential loss with fixed KL regularization."""
+        labels_flat = labels.float()
+        labels_flat = labels_flat.squeeze(-1) if labels_flat.dim() > 1 else labels_flat
+        y_onehot = F.one_hot(labels_flat.long(), num_classes=self.num_classes).float()
 
-        return self.loss_fn(predictions, labels).mean()
+        return dirichlet_loss(
+            y_onehot=y_onehot,
+            alpha=outputs["alpha"],
+            lambda_coeff=self.training_config.evidence_lambda_coeff,
+        )
 
-    def _forward_batch(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def _forward_batch(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """Forward pass with explicit batch unpacking.
 
         Detects mode based on batch contents:
@@ -287,36 +291,28 @@ class HELMGLaMLightning(L.LightningModule):
         - Tokenized mode: drug_ids, target_ids present
         """
         if "drug_embedding" in batch:
-            # Embedding mode - explicit key access
             return self(
                 drug_embedding=batch["drug_embedding"],
                 target_embedding=batch["target_embedding"],
             )
-        else:
-            # Tokenized mode - explicit key access
-            return self(
-                drug_ids=batch["drug_ids"],
-                drug_mask=batch["drug_mask"],
-                target_ids=batch["target_ids"],
-                target_mask=batch["target_mask"],
-            )
+        return self(
+            drug_ids=batch["drug_ids"],
+            drug_mask=batch["drug_mask"],
+            target_ids=batch["target_ids"],
+            target_mask=batch["target_mask"],
+        )
 
     def training_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
         """Training step."""
-        predictions = self._forward_batch(batch)
+        outputs = self._forward_batch(batch)
         labels = batch["label"]
-        loss = self._compute_loss(predictions, labels)
+        loss = self._compute_loss(outputs, labels)
 
-        self.log(
-            "train_loss",
-            loss,
-            on_step=True,
-            on_epoch=True,
-            prog_bar=True,
-            batch_size=labels.size(0),
-        )
+        batch_size = labels.size(0)
+
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
 
         return loss
 
@@ -326,7 +322,7 @@ class HELMGLaMLightning(L.LightningModule):
         """Validation step."""
         outputs = self._forward_batch(batch)
         labels = batch["label"]
-        loss = self._compute_loss(predictions, labels)
+        loss = self._compute_loss(outputs, labels)
 
         self.log(
             "val_loss",
@@ -353,7 +349,7 @@ class HELMGLaMLightning(L.LightningModule):
         """Test step."""
         outputs = self._forward_batch(batch)
         labels = batch["label"]
-        loss = self._compute_loss(predictions, labels)
+        loss = self._compute_loss(outputs, labels)
 
         self.log(
             "test_loss",
