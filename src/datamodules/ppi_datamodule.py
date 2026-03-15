@@ -135,19 +135,59 @@ class PPIDataModule(L.LightningDataModule):
             and self.target_embeddings is not None
         )
 
-    def _load_embeddings(
-        self, train_df: pd.DataFrame, test_df: Optional[pd.DataFrame]
-    ) -> None:
-        """Load pre-computed embeddings if enabled."""
+    def _get_all_unique_sequences(self) -> tuple[List[str], List[str]]:
+        """Load data files and return unique drug/target sequences."""
+        train_df = pd.read_csv(self.config.train_file)
+        drug_col, target_col = self.config.drug_column, self.config.target_column
+
+        all_drugs = set(train_df[drug_col].unique())
+        all_targets = set(train_df[target_col].unique())
+
+        test_file = Path(self.config.test_file)
+        if test_file.exists():
+            test_df = pd.read_csv(test_file)
+            all_drugs.update(test_df[drug_col].unique())
+            all_targets.update(test_df[target_col].unique())
+
+        return list(all_drugs), list(all_targets)
+
+    def prepare_data(self) -> None:
+        """Generate embedding cache if missing. Runs once on rank 0."""
         if not self._use_cached_embeddings():
             return
 
-        cache_dir = Path(self.config.cache_dir)
-        if not cache_dir.exists():
-            raise FileNotFoundError(
-                f"Cache directory not found: {cache_dir}. "
-                "Run generate_ppi_embeddings.py first."
-            )
+        unique_drugs, unique_targets = self._get_all_unique_sequences()
+        cache = EmbeddingCache(Path(self.config.cache_dir))
+
+        generate_drug_embeddings(
+            cache=cache,
+            sequences=unique_drugs,
+            encoder_name=self.config.cache_drug_encoder_name,
+            dataset_type=self.config.cache_dataset_type,
+            pretrained_path=self.config.drug_encoder,
+            max_length=self.config.max_drug_length,
+            batch_size=self.config.batch_size,
+            trust_remote_code=self.config.trust_remote_code,
+        )
+
+        generate_target_embeddings(
+            cache=cache,
+            sequences=unique_targets,
+            encoder_name=self.config.cache_target_encoder_name,
+            dataset_type=self.config.cache_dataset_type,
+            pretrained_path=self.config.target_encoder,
+            max_length=self.config.max_target_length,
+            batch_size=self.config.batch_size,
+        )
+
+        logger.info("Embedding cache ready at: %s", self.config.cache_dir)
+
+    def _load_embeddings(
+        self, train_df: pd.DataFrame, test_df: Optional[pd.DataFrame]
+    ) -> None:
+        """Load pre-computed embeddings from cache."""
+        if not self._use_cached_embeddings():
+            return
 
         drug_col = self.config.drug_column
         target_col = self.config.target_column
