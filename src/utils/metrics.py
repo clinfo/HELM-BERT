@@ -137,7 +137,7 @@ def compute_classification_metrics(
     metrics["mcc"] = float(matthews_corrcoef(labels, preds))
 
     # F1 score
-    avg = "weighted" if num_classes > 1 else "binary"
+    avg = "binary" if num_classes <= 2 else "weighted"
     metrics["f1"] = float(f1_score(labels, preds, average=avg, zero_division=0))
 
     # Additional metrics

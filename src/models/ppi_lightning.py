@@ -1,10 +1,16 @@
 """HELMGLaM PPI Lightning Module.
 
+Evidential Deep Learning via Dirichlet distribution for classification.
 Dual-encoder architecture for peptide-protein interaction prediction:
 - Drug encoder: HELM-BERT (from HuggingFace Hub)
 - Target encoder: ESM-2
 - Fusion: Concatenation
-- Head: MLP classifier
+- Head: MLP → Dirichlet alpha parameters
+
+References:
+    Sensoy et al. (2018) "Evidential Deep Learning to Quantify
+    Classification Uncertainty" NeurIPS. arXiv:1806.01768
+    Soleimany et al. (2021) ACS Central Science.
 """
 
 import logging
@@ -17,9 +23,11 @@ import lightning as L
 import numpy as np
 import torch
 import torch.nn as nn
-from transformers import AutoModel, AutoConfig
+import torch.nn.functional as F
+from transformers import AutoConfig, AutoModel
 
 from src.heads.mlp_net import MLPNet
+from src.losses.evidential import dirichlet_loss
 from src.utils.metrics import compute_classification_metrics
 
 logger = logging.getLogger(__name__)
@@ -39,19 +47,20 @@ class PPITrainingConfig:
     early_stopping_patience: int
     mlp_dropout: float
     num_classes: int
-    pos_weight: Optional[float]
     freeze_drug_encoder: bool
     freeze_target_encoder: bool
     use_cached_embeddings: bool
     target_encoder: str
     esm_hidden_sizes: Dict[str, int]
     prediction_threshold: float
+    evidence_lambda_coeff: float
 
 
 class HELMGLaMLightning(L.LightningModule):
-    """PyTorch Lightning module for peptide-protein interaction prediction.
+    """PyTorch Lightning module for evidential PPI prediction.
 
     Uses HELM-BERT for peptide encoding and ESM-2 for protein encoding.
+    Outputs Dirichlet alpha parameters for uncertainty-aware classification.
 
     Args:
         drug_model_path: HuggingFace Hub model ID or local path (required)
@@ -80,7 +89,6 @@ class HELMGLaMLightning(L.LightningModule):
         # Initialize components
         self._init_encoders()
         self._init_head()
-        self._init_loss_function()
 
         # Storage for metrics
         self.validation_outputs: List[Dict] = []
@@ -144,7 +152,7 @@ class HELMGLaMLightning(L.LightningModule):
             logger.info(f"  Target encoder: ESM-2 (dim={self.target_dim}) [TRAINABLE]")
 
     def _init_head(self) -> None:
-        """Initialize MLP head (auto dimensions from encoders)."""
+        """Initialize MLP head with Dirichlet output dimension."""
         mlp_input_dim = self.drug_dim + self.target_dim
 
         self.mlp_net = MLPNet(
@@ -154,16 +162,10 @@ class HELMGLaMLightning(L.LightningModule):
             dropout=self.training_config.mlp_dropout,
         )
 
-    def _init_loss_function(self) -> None:
-        """Initialize loss function."""
-        if self.training_config.pos_weight is not None:
-            self.loss_fn = nn.BCEWithLogitsLoss(
-                reduction="none",
-                pos_weight=torch.tensor([self.training_config.pos_weight]),
-            )
-            logger.info(f"Using pos_weight={self.training_config.pos_weight}")
-        else:
-            self.loss_fn = nn.BCEWithLogitsLoss(reduction="none")
+        logger.info(
+            f"  MLP head: {mlp_input_dim} → {self.num_classes} "
+            f"(Dirichlet K={self.num_classes})"
+        )
 
     def forward(
         self,
@@ -173,17 +175,32 @@ class HELMGLaMLightning(L.LightningModule):
         target_mask: Optional[torch.Tensor] = None,
         drug_embedding: Optional[torch.Tensor] = None,
         target_embedding: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        """Forward pass."""
-        # Encode drug
+    ) -> Dict[str, torch.Tensor]:
+        """Forward pass with Dirichlet parameterization.
+
+        Returns:
+            Dict with keys:
+                alpha: Dirichlet concentration parameters [batch, K]
+                probs: Expected class probabilities [batch, K]
+                uncertainty: Total uncertainty K/S [batch]
+        """
         drug_pooled = self._encode_drug(drug_ids, drug_mask, drug_embedding)
         target_pooled = self._encode_target(target_ids, target_mask, target_embedding)
 
-        # Fuse and predict
         fused = torch.cat([drug_pooled, target_pooled], dim=-1)
-        predictions = self.mlp_net(fused)
+        raw_output = self.mlp_net(fused)  # [batch, K]
 
-        return predictions
+        # Dirichlet parameterization: alpha > 1
+        alpha = F.softplus(raw_output) + 1.0
+        S = alpha.sum(dim=-1, keepdim=True)
+        probs = alpha / S
+        uncertainty = float(self.num_classes) / S.squeeze(-1)
+
+        return {
+            "alpha": alpha,
+            "probs": probs,
+            "uncertainty": uncertainty,
+        }
 
     def _encode_drug(
         self,
@@ -252,7 +269,7 @@ class HELMGLaMLightning(L.LightningModule):
 
     def _compute_loss(
         self,
-        predictions: torch.Tensor,
+        outputs: Dict[str, torch.Tensor],
         labels: torch.Tensor,
     ) -> torch.Tensor:
         """Compute loss."""
@@ -307,7 +324,7 @@ class HELMGLaMLightning(L.LightningModule):
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
         """Validation step."""
-        predictions = self._forward_batch(batch)
+        outputs = self._forward_batch(batch)
         labels = batch["label"]
         loss = self._compute_loss(predictions, labels)
 
@@ -321,10 +338,12 @@ class HELMGLaMLightning(L.LightningModule):
             batch_size=labels.size(0),
         )
 
+        # Store log(alpha) as predictions: softmax(log(alpha)) = alpha/S = probs
         self.validation_outputs.append(
             {
-                "predictions": predictions.detach(),
+                "predictions": torch.log(outputs["alpha"]).detach(),
                 "targets": labels.detach(),
+                "uncertainty": outputs["uncertainty"].detach(),
             }
         )
 
@@ -332,7 +351,7 @@ class HELMGLaMLightning(L.LightningModule):
 
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
         """Test step."""
-        predictions = self._forward_batch(batch)
+        outputs = self._forward_batch(batch)
         labels = batch["label"]
         loss = self._compute_loss(predictions, labels)
 
@@ -345,9 +364,10 @@ class HELMGLaMLightning(L.LightningModule):
             batch_size=labels.size(0),
         )
 
+        # Store log(alpha) as predictions: softmax(log(alpha)) = alpha/S = probs
         self.test_outputs.append(
             {
-                "predictions": predictions.detach(),
+                "predictions": torch.log(outputs["alpha"]).detach(),
                 "targets": labels.detach(),
             }
         )
@@ -357,12 +377,13 @@ class HELMGLaMLightning(L.LightningModule):
     def predict_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> Dict[str, torch.Tensor]:
-        """Prediction step."""
-        predictions = self._forward_batch(batch)
+        """Prediction step with uncertainty."""
+        outputs = self._forward_batch(batch)
 
         return {
-            "predictions": predictions.detach(),
+            "predictions": outputs["probs"][:, 1].detach(),
             "targets": batch["label"].detach(),
+            "uncertainty": outputs["uncertainty"].detach(),
         }
 
     def on_validation_epoch_end(self) -> None:
@@ -374,7 +395,11 @@ class HELMGLaMLightning(L.LightningModule):
         self._compute_epoch_metrics(self.test_outputs, "test")
 
     def _compute_epoch_metrics(self, outputs: List[Dict], prefix: str) -> None:
-        """Compute metrics at epoch end."""
+        """Compute metrics at epoch end.
+
+        Predictions are log(alpha) [N, K]. compute_classification_metrics
+        applies softmax → recovers alpha/S = correct Dirichlet probabilities.
+        """
         if not outputs:
             return
 
@@ -385,6 +410,11 @@ class HELMGLaMLightning(L.LightningModule):
             logger.error(f"Failed to concatenate {prefix} outputs: {e}")
             outputs.clear()
             return
+
+        # Log mean uncertainty (validation only)
+        if prefix == "val" and "uncertainty" in outputs[0]:
+            all_uncertainty = torch.cat([x["uncertainty"] for x in outputs])
+            self.log("val_mean_uncertainty", all_uncertainty.mean())
 
         outputs.clear()
 

@@ -214,6 +214,8 @@ cache/
 scripts/data/
 /backups/
 huggingface_upload/model.safetensors
+/huggingface_upload
+/data/embeddings/
 
 # Ignore all hidden files and directories (except .gitignore)
 .*
