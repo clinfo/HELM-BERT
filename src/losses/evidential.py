@@ -12,6 +12,8 @@ Molecular application reference:
     doi:10.1021/acscentsci.1c00546
 """
 
+import math
+
 import torch
 from torch import Tensor
 
@@ -90,7 +92,7 @@ def nig_loss(
         nu: Evidence for mean, > 0 [batch_size]
         alpha: Evidence for variance, > 1 [batch_size]
         beta: Scale parameter, > 0 [batch_size]
-        lambda_coeff: Regularization coefficient (pre-annealed).
+        lambda_coeff: Regularization coefficient.
 
     Returns:
         Scalar combined loss.
@@ -105,38 +107,34 @@ def nig_loss(
 # =============================================================================
 
 
-def dirichlet_mse_loss(y_onehot: Tensor, alpha: Tensor) -> Tensor:
-    """Bayes risk of squared error under Dirichlet prior.
+def dirichlet_digamma_loss(y_onehot: Tensor, alpha: Tensor) -> Tensor:
+    """Expected log probability loss under Dirichlet prior.
 
-    Eq. 5 from Sensoy et al. (2018):
-        L = sum_k [(y_k - p_k)^2 + p_k*(1 - p_k)/(S + 1)]
-    where S = sum(alpha), p_k = alpha_k / S.
+    Eq. 4 from Sensoy et al. (2018):
+        L = sum_k y_k * (digamma(S) - digamma(alpha_k))
+    where S = sum(alpha).
 
     Args:
         y_onehot: One-hot encoded labels [batch_size, K]
         alpha: Dirichlet concentration parameters, > 1 [batch_size, K]
 
     Returns:
-        Scalar mean MSE loss.
+        Scalar mean digamma loss.
     """
     S = alpha.sum(dim=-1, keepdim=True)
-    p = alpha / S
-
-    err = (y_onehot - p).pow(2).sum(dim=-1)
-    var = (p * (1.0 - p) / (S + 1.0)).sum(dim=-1)
-
-    return (err + var).mean()
+    loss = (y_onehot * (torch.digamma(S) - torch.digamma(alpha))).sum(dim=-1)
+    return loss.mean()
 
 
-def dirichlet_kl_loss(alpha: Tensor, y_onehot: Tensor) -> Tensor:
+def dirichlet_kl_loss(y_onehot: Tensor, alpha: Tensor) -> Tensor:
     """KL divergence between modified Dirichlet and uniform Dirichlet.
 
     Removes non-misleading evidence (correct-class evidence) before
     computing KL to avoid penalizing confident correct predictions.
 
     Args:
-        alpha: Dirichlet concentration parameters [batch_size, K]
         y_onehot: One-hot encoded labels [batch_size, K]
+        alpha: Dirichlet concentration parameters [batch_size, K]
 
     Returns:
         Scalar mean KL divergence.
@@ -145,11 +143,10 @@ def dirichlet_kl_loss(alpha: Tensor, y_onehot: Tensor) -> Tensor:
     S_tilde = alpha_tilde.sum(dim=-1, keepdim=True)
 
     K = alpha.shape[-1]
-    K_tensor = torch.tensor(float(K), device=alpha.device, dtype=alpha.dtype)
 
     kl = (
         torch.lgamma(S_tilde.squeeze(-1))
-        - torch.lgamma(K_tensor)
+        - math.lgamma(K)
         - torch.lgamma(alpha_tilde).sum(dim=-1)
         + (
             (alpha_tilde - 1.0)
@@ -167,16 +164,16 @@ def dirichlet_loss(
 ) -> Tensor:
     """Combined Dirichlet evidential classification loss.
 
-    loss = Dirichlet_MSE + lambda_coeff * KL_divergence
+    loss = Dirichlet_Digamma + lambda_coeff * KL_divergence
 
     Args:
         y_onehot: One-hot encoded labels [batch_size, K]
         alpha: Dirichlet concentration parameters [batch_size, K]
-        lambda_coeff: KL regularization coefficient (pre-annealed).
+        lambda_coeff: KL regularization coefficient.
 
     Returns:
         Scalar combined loss.
     """
-    return dirichlet_mse_loss(y_onehot, alpha) + lambda_coeff * dirichlet_kl_loss(
-        alpha, y_onehot
+    return dirichlet_digamma_loss(y_onehot, alpha) + lambda_coeff * dirichlet_kl_loss(
+        y_onehot, alpha
     )

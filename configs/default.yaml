@@ -61,7 +61,7 @@ display:
 # Logging
 # =============================================================================
 logging:
-  wandb_project: helm-bert
+  wandb_project: HELM-BERT
   wandb_entity: null
   disable_wandb: false
   tags: []

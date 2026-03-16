@@ -42,6 +42,7 @@ from scripts.training_utils import (
     setup_logging,
     setup_training_env,
     to_dict,
+    build_tags,
 )
 from src.datamodules import PermeabilityDataModule, PermeabilityDataConfig
 from src.models.permeability_lightning import (
@@ -142,7 +143,7 @@ def main():
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
-        tags=["permeability", "downstream", "regression", "evidential", config.data.split_name] + (config.logging.tags or []),
+        tags=build_tags(config, ["permeability", "downstream", "regression", "evidential", config.data.split_name]),
     )
 
     # Create trainer

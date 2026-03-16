@@ -29,6 +29,13 @@ CONFIG_DIR = Path(__file__).parent.parent / "configs"
 # Constants
 SEPARATOR_LINE = "=" * 60
 
+# (config path, tag if True, tag if False)
+_FREEZE_FIELDS: list[tuple[str, str, str]] = [
+    ("model.drug_encoder.freeze", "drug-frozen", "drug-trainable"),
+    ("model.target_encoder.freeze", "target-frozen", "target-trainable"),
+    ("model.freeze_encoder", "frozen", "trainable"),
+]
+
 
 # =============================================================================
 # Configuration Dataclasses
@@ -205,6 +212,23 @@ def parse_argparse_overrides(argv: List[str], task: str) -> List[str]:
 def to_dict(config: DictConfig) -> dict:
     """Convert OmegaConf config to plain dictionary."""
     return OmegaConf.to_container(config, resolve=True)
+
+
+def build_tags(config: DictConfig, base_tags: list[str]) -> list[str]:
+    """Build wandb tags from base tags, auto-generated config tags, and user tags.
+
+    Auto-generated tags are derived from key hyperparameters so each run is
+    self-describing in wandb without manual bookkeeping.
+    """
+    lambda_coeff = OmegaConf.select(config, "evidence.lambda_coeff")
+    auto_tags = [f"lambda{lambda_coeff}"] if lambda_coeff is not None else []
+
+    for path, frozen, trainable in _FREEZE_FIELDS:
+        val = OmegaConf.select(config, path)
+        if val is not None:
+            auto_tags.append(frozen if val else trainable)
+
+    return base_tags + auto_tags + list(config.logging.tags or [])
 
 
 # =============================================================================
