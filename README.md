@@ -117,6 +117,9 @@ python scripts/train_permeability.py --train_file ./data/train.csv --test_file .
 | `training.batch_size` | 32 | Batch size |
 | `training.encoder_lr` | 3e-5 | Encoder learning rate |
 | `training.head_lr` | 1e-4 | Head learning rate |
+| `evidence.lambda_coeff` | 0.01 | NIG evidence regularization weight |
+
+Outputs: `pred, actual, aleatoric_uncertainty, epistemic_uncertainty`
 
 ### PPI Classification
 
@@ -146,6 +149,9 @@ python scripts/train_ppi.py --config configs/ppi_random.yaml --freeze_drug_encod
 | `training.batch_size` | 32 | Batch size |
 | `training.encoder_lr` | 3e-5 | Encoder learning rate |
 | `training.head_lr` | 1e-4 | Head learning rate |
+| `evidence.lambda_coeff` | 0.15 | Dirichlet evidence regularization weight |
+
+Outputs: `pred_prob, pred_label, actual, uncertainty`
 
 ### Common Options
 
@@ -159,6 +165,17 @@ These options apply to all training scripts (`configs/default.yaml`):
 | `hardware.devices` | auto | GPU devices |
 | `hardware.precision` | 32-true | 32-true, 16-mixed, bf16-mixed |
 | `logging.disable_wandb` | false | Disable WandB logging |
+
+### Uncertainty Quantification
+
+All downstream tasks use Evidential Deep Learning ([Soleimany et al. 2021](https://pubs.acs.org/doi/10.1021/acscentsci.1c00546), [Sensoy et al. 2018](https://proceedings.neurips.cc/paper/2018/hash/a981f2b708044d6fb4a71a1463242520-Abstract.html)) for per-prediction uncertainty estimates:
+
+| Task | Distribution | Uncertainty Output |
+|------|-------------|-------------------|
+| Permeability | Normal-Inverse-Gamma | Aleatoric (data noise) + Epistemic (model uncertainty) |
+| PPI | Dirichlet | Total uncertainty (K/S) |
+
+The `evidence.lambda_coeff` controls the regularization strength between task loss and evidence penalty. Values were selected via a 12-point lambda sweep (0.01–2.0) optimizing both prediction performance and uncertainty calibration quality.
 
 ## Citation
 
