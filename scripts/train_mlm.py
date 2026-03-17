@@ -59,7 +59,7 @@ def main():
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     mode_str = "scratch" if config.model.from_scratch else "continue"
-    run_name = f"helmbert_mlm_{mode_str}_{timestamp}"
+    run_name = f"mlm_{mode_str}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     # Setup logging
@@ -169,6 +169,7 @@ def main():
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
+        tags=["mlm", "pretrain", mode_str] + (config.logging.tags or []),
     )
 
     # Create trainer

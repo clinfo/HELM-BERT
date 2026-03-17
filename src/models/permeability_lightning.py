@@ -139,15 +139,15 @@ class HELMBertPermeabilityLightning(L.LightningModule):
         )
         logits = outputs.logits  # [batch, 4]
 
-        # NIG parameterization with constraints
+        # NIG parameterization with constraints.
+        # dtype-aware eps floor: prevents beta/(nu*(alpha-1)) blowup across precisions.
+        eps = torch.finfo(logits.dtype).eps
         gamma = logits[:, 0]
-        nu = F.softplus(logits[:, 1])
-        alpha = F.softplus(logits[:, 2]) + 1.0
-        beta = F.softplus(logits[:, 3])
+        nu = F.softplus(logits[:, 1]) + eps
+        alpha = F.softplus(logits[:, 2]) + 1.0 + eps
+        beta = F.softplus(logits[:, 3]) + eps
 
-        # Uncertainty decomposition (eps for numerical safety)
-        eps = torch.finfo(alpha.dtype).eps
-        alpha_minus_one = alpha - 1.0 + eps
+        alpha_minus_one = alpha - 1.0
 
         return {
             "predictions": gamma.unsqueeze(-1),
