@@ -31,7 +31,7 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
 DEFAULT_LOG_DIR = REPO_ROOT / "outputs/preprocessing"
 
 SEED = 42
-TEST_RATIO = 0.1  # 8:1:1 split (10% test)
+TEST_RATIO = 0.2  # 8:2 split (20% test)
 NEGATIVE_RATIO = 4  # 1:4 (positive:negative)
 
 DRUG_COL = "Peptide_HELM"

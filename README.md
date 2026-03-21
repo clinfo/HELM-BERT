@@ -185,15 +185,18 @@ The `evidence.lambda_coeff` controls the regularization strength between task lo
 |:--:|:-------:|:----:|:---:|
 | 0.758 | 0.871 | 0.384 | 0.283 |
 
+Train/test 9:1, val 10% from train.
+
 ### PPI Classification (Propedia v2)
 
 | Split | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
 |:-----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 0.967 | 0.897 | 0.851 | 0.814 | 0.907 |
+| Random | 0.964 | 0.886 | 0.826 | 0.784 | 0.887 |
 | aCSM | 0.870 | 0.700 | 0.608 | 0.549 | 0.734 |
 
-- **Random**: random train/test split (8:1:1)
-- **aCSM**: clustering-based split on aCSM-ALL complex signatures, with protein overlap pruning (no protein leakage between train/test)
+Train/test 8:2, val 10% from train, 1:4 positive:negative ratio.
+- **Random**: random split
+- **aCSM**: clustering-based split on aCSM-ALL complex signatures with protein overlap pruning
 
 <p align="center"><img src="assets/tsne_ppi_splits.png" width="800"></p>
 
