@@ -13,6 +13,8 @@ HELM-BERT is built upon the DeBERTa architecture, designed for peptide sequences
 - **Span Masking**: Contiguous token masking with geometric distribution
 - **nGiE**: n-gram Induced Encoding layer (1D convolution, kernel size 3)
 
+<p align="center"><img src="assets/HELM-BERT.png" width="600"></p>
+
 ## Model Specifications
 
 | Parameter | Value |
