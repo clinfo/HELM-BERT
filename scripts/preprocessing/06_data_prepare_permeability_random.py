@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import argparse
 import logging
+from datetime import datetime
+from typing import Tuple
 
 import pandas as pd
 import lightning as L
@@ -19,6 +21,7 @@ from sklearn.model_selection import train_test_split
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = REPO_ROOT / "data/mlm/cycpeptmpdb_deduplicated.csv"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
+DEFAULT_LOG_DIR = REPO_ROOT / "outputs/preprocessing"
 
 SEED = 42
 TEST_RATIO = 0.1  # 8:1:1 split (10% test)
@@ -28,20 +31,52 @@ SMILES_COL = "SMILES"
 HELM_COL = "HELM"
 TARGET_COL = "Permeability"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# Logging configuration
+LOG_LEVEL = logging.INFO
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
 logger = logging.getLogger(__name__)
 
 
+def setup_logging(log_base: Path = DEFAULT_LOG_DIR) -> Tuple[logging.Logger, Path]:
+    """Set up logging to both console and file."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = log_base / f"permeability_random_preparation_{timestamp}"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = log_dir / "prepare_permeability_random.log"
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(LOG_LEVEL)
+    logger.handlers = []
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(LOG_LEVEL)
+    console_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(LOG_LEVEL)
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    logger.info(f"Log file: {log_file.absolute()}")
+
+    return logger, log_dir
+
+
 def main():
+    global logger
+
     parser = argparse.ArgumentParser(description="Prepare permeability data")
     parser.add_argument("--source", type=str, default=str(DEFAULT_SOURCE))
     parser.add_argument("--output-dir", type=str, default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--test-ratio", type=float, default=TEST_RATIO)
     parser.add_argument("--seed", type=int, default=SEED)
     args = parser.parse_args()
+
+    logger, log_dir = setup_logging()
 
     L.seed_everything(args.seed)
 
