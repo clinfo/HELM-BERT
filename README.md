@@ -177,6 +177,29 @@ All downstream tasks use Evidential Deep Learning ([Soleimany et al. 2021](https
 
 The `evidence.lambda_coeff` controls the regularization strength between task loss and evidence penalty. Values were selected via a 12-point lambda sweep (0.01–2.0) optimizing both prediction performance and uncertainty calibration quality.
 
+## Performance
+
+### Permeability Regression (CycPeptMPDB)
+
+| R² | Pearson | RMSE | MAE |
+|:--:|:-------:|:----:|:---:|
+| 0.758 | 0.871 | 0.384 | 0.283 |
+
+Train/test 9:1, val 10% from train.
+
+### PPI Classification (Propedia v2)
+
+| Split | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
+|:-----:|:-------:|:------:|:--:|:---:|:------------:|
+| Random | 0.964 | 0.886 | 0.826 | 0.784 | 0.887 |
+| aCSM | 0.870 | 0.700 | 0.608 | 0.549 | 0.734 |
+
+Train/test 8:2, val 10% from train, 1:4 positive:negative ratio.
+- **Random**: random split
+- **aCSM**: clustering-based split on aCSM-ALL complex signatures with protein overlap pruning
+
+<p align="center"><img src="assets/tsne_ppi_splits.png" width="800"></p>
+
 ## Citation
 
 If you use HELM-BERT in your research, please cite:

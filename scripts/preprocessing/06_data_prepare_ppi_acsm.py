@@ -9,8 +9,10 @@ Pipeline:
 2. Load pre-computed aCSM signatures (from 05_data_generate_acsm_signatures.py)
 3. Cluster complexes via K-Means on PCA-reduced signatures
 4. Split clusters into train/test groups
-5. Generate negative pairs per split
-6. Output: propedia_ppi_acsm_train.csv, propedia_ppi_acsm_test.csv
+5. Protein majority pruning (no protein overlap between splits)
+6. Generate negative pairs per split
+7. Final assertions (protein/pair/positive-negative collision checks)
+8. Output: propedia_ppi_acsm_train.csv, propedia_ppi_acsm_test.csv
 """
 
 import os
@@ -24,6 +26,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import argparse
 import logging
+from collections import defaultdict
+from datetime import datetime
 from typing import Set, Tuple, List, Dict
 
 import numpy as np
@@ -38,6 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = REPO_ROOT / "local_data/intermediate_product/Propedia_v2_unique_ppi_HELM_SMILES.csv"
 DEFAULT_SIGNATURE_DIR = REPO_ROOT / "local_data/intermediate_product/signatures_acsm_all"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
+DEFAULT_LOG_DIR = REPO_ROOT / "outputs/preprocessing"
 
 SEED = 42
 TEST_RATIO = 0.2
@@ -57,10 +62,49 @@ DRUG_COL = "Peptide_HELM"
 TARGET_COL = "Receptor_Sequence"
 LABEL_COL = "Label"
 
+# Split priority: test wins tiebreaker (preserve evaluation integrity)
+SPLIT_PRIORITY = {"test": 0, "train": 1}
+
 COMPLEX_SIGNATURE_FILE = "complex_signatures_acsm_all.csv"
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# Logging configuration
+LOG_LEVEL = logging.INFO
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
 logger = logging.getLogger(__name__)
+
+
+def setup_logging(log_base: Path = DEFAULT_LOG_DIR) -> Tuple[logging.Logger, Path]:
+    """Set up logging to both console and file."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = log_base / f"ppi_acsm_preparation_{timestamp}"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = log_dir / "prepare_ppi_acsm.log"
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(LOG_LEVEL)
+    logger.handlers = []
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(LOG_LEVEL)
+    console_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(LOG_LEVEL)
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    logger.info(f"Log file: {log_file.absolute()}")
+
+    return logger, log_dir
+
+
+def _norm(s: str) -> str:
+    """Normalize string for consistent comparison."""
+    return str(s).strip().upper()
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +193,64 @@ def cluster_and_split(
 
 
 # ---------------------------------------------------------------------------
-# Negative pair generation (same as random version)
+# Protein majority pruning
+# ---------------------------------------------------------------------------
+
+def prune_protein_overlap(
+    train_pos: pd.DataFrame,
+    test_pos: pd.DataFrame,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Assign each protein to the split where it has more positive pairs.
+
+    Tiebreaker: test wins (preserve evaluation integrity).
+    Pairs whose protein lost the majority vote are dropped (not moved).
+
+    Returns:
+        (train_pos_pruned, test_pos_pruned)
+    """
+    # Count pairs per protein per split
+    protein_scores: Dict[str, Dict[str, int]] = {}
+    for split_name, split_df in [("train", train_pos), ("test", test_pos)]:
+        counts = split_df.groupby(TARGET_COL).size()
+        for prot, count in counts.items():
+            key = _norm(prot)
+            if key not in protein_scores:
+                protein_scores[key] = {"train": 0, "test": 0}
+            protein_scores[key][split_name] = int(count)
+
+    # Determine winner for each protein
+    protein_winner: Dict[str, str] = {}
+    for prot, scores in protein_scores.items():
+        protein_winner[prot] = min(
+            scores.keys(), key=lambda s: (-scores[s], SPLIT_PRIORITY[s])
+        )
+
+    n_contested = sum(1 for s in protein_scores.values() if s["train"] > 0 and s["test"] > 0)
+    logger.info(f"Proteins appearing in both splits: {n_contested}")
+
+    # Prune
+    before_train = len(train_pos)
+    train_keep = train_pos[TARGET_COL].map(
+        lambda p: protein_winner.get(_norm(p), "train") == "train"
+    )
+    train_pos = train_pos[train_keep.values].copy()
+
+    before_test = len(test_pos)
+    test_keep = test_pos[TARGET_COL].map(
+        lambda p: protein_winner.get(_norm(p), "test") == "test"
+    )
+    test_pos = test_pos[test_keep.values].copy()
+
+    logger.info(f"Protein pruning: train {before_train} -> {len(train_pos)} "
+                f"(-{before_train - len(train_pos)}), "
+                f"test {before_test} -> {len(test_pos)} "
+                f"(-{before_test - len(test_pos)})")
+
+    return train_pos, test_pos
+
+
+# ---------------------------------------------------------------------------
+# Negative pair generation
 # ---------------------------------------------------------------------------
 
 def generate_negative_pairs(
@@ -195,10 +296,92 @@ def generate_negative_pairs(
 
 
 # ---------------------------------------------------------------------------
+# Overlap logging
+# ---------------------------------------------------------------------------
+
+def log_overlap_stats(train_df: pd.DataFrame, test_df: pd.DataFrame) -> None:
+    """Log protein/peptide/pair overlap statistics between train and test."""
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("Overlap Analysis (train vs test)")
+    logger.info("=" * 60)
+
+    # Positive pairs only
+    train_p = train_df[train_df[LABEL_COL] == 1]
+    test_p = test_df[test_df[LABEL_COL] == 1]
+
+    # Protein overlap
+    train_prot = set(train_p[TARGET_COL].map(_norm))
+    test_prot = set(test_p[TARGET_COL].map(_norm))
+    prot_overlap = train_prot & test_prot
+    logger.info(f"Protein overlap (positive): {len(prot_overlap)} "
+                f"({len(prot_overlap) / max(len(test_prot), 1) * 100:.1f}% of test)")
+
+    # Peptide overlap
+    train_pep = set(train_p[DRUG_COL].map(_norm))
+    test_pep = set(test_p[DRUG_COL].map(_norm))
+    pep_overlap = train_pep & test_pep
+    logger.info(f"Peptide overlap (positive): {len(pep_overlap)} "
+                f"({len(pep_overlap) / max(len(test_pep), 1) * 100:.1f}% of test)")
+
+    # Pair overlap (all labels)
+    train_pairs = set(zip(train_df[DRUG_COL], train_df[TARGET_COL]))
+    test_pairs = set(zip(test_df[DRUG_COL], test_df[TARGET_COL]))
+    pair_overlap = train_pairs & test_pairs
+    logger.info(f"Pair overlap (all): {len(pair_overlap)}")
+
+
+# ---------------------------------------------------------------------------
+# Assertions
+# ---------------------------------------------------------------------------
+
+def run_assertions(train_df: pd.DataFrame, test_df: pd.DataFrame) -> None:
+    """Verify data quality: no protein overlap, no pair overlap, no pos-neg collision."""
+    logger.info("")
+    logger.info("Running final assertions...")
+
+    # 1. No protein overlap (positive pairs)
+    train_prot = set(train_df[train_df[LABEL_COL] == 1][TARGET_COL].map(_norm))
+    test_prot = set(test_df[test_df[LABEL_COL] == 1][TARGET_COL].map(_norm))
+    prot_overlap = train_prot & test_prot
+    assert len(prot_overlap) == 0, (
+        f"Protein overlap: {len(prot_overlap)} proteins in both train and test"
+    )
+    logger.info("  [PASS] No protein overlap between train/test")
+
+    # 2. No pair overlap (all labels)
+    train_pairs = set(zip(train_df[DRUG_COL], train_df[TARGET_COL]))
+    test_pairs = set(zip(test_df[DRUG_COL], test_df[TARGET_COL]))
+    pair_overlap = train_pairs & test_pairs
+    assert len(pair_overlap) == 0, (
+        f"Pair overlap: {len(pair_overlap)} pairs in both train and test"
+    )
+    logger.info("  [PASS] No pair overlap between train/test")
+
+    # 3. No positive-negative collision within each split
+    for name, split_df in [("train", train_df), ("test", test_df)]:
+        pos = set(zip(
+            split_df[split_df[LABEL_COL] == 1][DRUG_COL],
+            split_df[split_df[LABEL_COL] == 1][TARGET_COL],
+        ))
+        neg = set(zip(
+            split_df[split_df[LABEL_COL] == 0][DRUG_COL],
+            split_df[split_df[LABEL_COL] == 0][TARGET_COL],
+        ))
+        collision = pos & neg
+        assert len(collision) == 0, (
+            f"{name}: {len(collision)} pairs appear as both positive and negative"
+        )
+    logger.info("  [PASS] No positive-negative collision within splits")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main():
+    global logger
+
     parser = argparse.ArgumentParser(description="Prepare PPI data (aCSM clustering split)")
     parser.add_argument("--source", type=str, default=str(DEFAULT_SOURCE))
     parser.add_argument("--signature-dir", type=str, default=str(DEFAULT_SIGNATURE_DIR))
@@ -208,6 +391,8 @@ def main():
     parser.add_argument("--n-clusters", type=int, default=N_CLUSTERS)
     parser.add_argument("--seed", type=int, default=SEED)
     args = parser.parse_args()
+
+    logger, log_dir = setup_logging()
 
     L.seed_everything(args.seed)
 
@@ -265,9 +450,37 @@ def main():
         logger.info(f"Assigning {len(unassigned)} pairs from unmatched PDBs to train")
         train_pos = pd.concat([train_pos, unassigned], ignore_index=True)
 
-    logger.info(f"Positive split: {len(train_pos)} train, {len(test_pos)} test")
+    logger.info(f"Positive split (before pruning): {len(train_pos)} train, {len(test_pos)} test")
 
-    # Generate negatives
+    # --- Protein majority pruning ---
+    train_pos, test_pos = prune_protein_overlap(train_pos, test_pos)
+
+    logger.info(f"Positive split (after pruning): {len(train_pos)} train, {len(test_pos)} test")
+
+    # --- Pair registry (test first, then train) ---
+    # Process test first to give it priority
+    pair_registry: Set[Tuple[str, str]] = set()
+
+    # Register test positive pairs
+    for pep, prot in zip(test_pos[DRUG_COL], test_pos[TARGET_COL]):
+        pair_registry.add((pep, prot))
+
+    # Deduplicate train against test
+    before_train = len(train_pos)
+    train_keep = [
+        (pep, prot) not in pair_registry
+        for pep, prot in zip(train_pos[DRUG_COL], train_pos[TARGET_COL])
+    ]
+    train_pos = train_pos[train_keep].copy()
+    if before_train - len(train_pos) > 0:
+        logger.info(f"Pair dedup: removed {before_train - len(train_pos)} train pairs "
+                    f"already in test")
+
+    # Register train positive pairs
+    for pep, prot in zip(train_pos[DRUG_COL], train_pos[TARGET_COL]):
+        pair_registry.add((pep, prot))
+
+    # --- Generate negatives ---
     train_peptides = list(train_pos[DRUG_COL].unique())
     train_proteins = list(train_pos[TARGET_COL].unique())
     test_peptides = list(test_pos[DRUG_COL].unique())
@@ -276,25 +489,29 @@ def main():
     logger.info(f"Train pool: {len(train_peptides)} peptides x {len(train_proteins)} proteins")
     logger.info(f"Test pool: {len(test_peptides)} peptides x {len(test_proteins)} proteins")
 
-    logger.info("Generating train negatives...")
-    train_neg_pairs = generate_negative_pairs(
-        n_negative=len(train_pos) * args.negative_ratio,
-        peptides=train_peptides, proteins=train_proteins,
-        positive_pairs=global_positive_pairs, existing_negatives=set(),
-        seed=args.seed,
-    )
-    logger.info(f"Generated {len(train_neg_pairs)} train negatives")
-
-    all_negatives = set(train_neg_pairs)
-
+    # Test negatives first (priority)
     logger.info("Generating test negatives...")
     test_neg_pairs = generate_negative_pairs(
         n_negative=len(test_pos) * args.negative_ratio,
         peptides=test_peptides, proteins=test_proteins,
-        positive_pairs=global_positive_pairs, existing_negatives=all_negatives,
+        positive_pairs=global_positive_pairs, existing_negatives=set(),
         seed=args.seed + 1,
     )
     logger.info(f"Generated {len(test_neg_pairs)} test negatives")
+
+    # Register test negatives
+    for pair in test_neg_pairs:
+        pair_registry.add(pair)
+
+    # Train negatives (exclude test negatives)
+    logger.info("Generating train negatives...")
+    train_neg_pairs = generate_negative_pairs(
+        n_negative=len(train_pos) * args.negative_ratio,
+        peptides=train_peptides, proteins=train_proteins,
+        positive_pairs=global_positive_pairs, existing_negatives=pair_registry,
+        seed=args.seed,
+    )
+    logger.info(f"Generated {len(train_neg_pairs)} train negatives")
 
     # Build output DataFrames
     output_cols = [DRUG_COL, TARGET_COL, LABEL_COL]
@@ -323,6 +540,10 @@ def main():
         neg = (data[LABEL_COL] == 0).sum()
         ratio = neg / pos if pos > 0 else 0
         logger.info(f"  {name}: {pos} pos, {neg} neg (1:{ratio:.1f})")
+
+    # Overlap analysis & assertions
+    log_overlap_stats(train_df, test_df)
+    run_assertions(train_df, test_df)
 
     # Save
     train_file = output_dir / "propedia_ppi_acsm_train.csv"
