@@ -3,6 +3,9 @@
 # =============================================================================
 # Usage: python scripts/train_ppi.py --config configs/ppi_acsm.yaml
 
+training:
+  max_epochs: 70
+
 data:
   split_name: acsm
   train_file: ./data/downstream/propedia_ppi_acsm_train.csv

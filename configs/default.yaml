@@ -25,8 +25,10 @@ model:
 training:
   seed: 42
   weight_decay: 0.01
-  early_stopping_patience: 20
   gradient_clip_val: 1.0
+  # WSD (Warmup-Stable-Decay) scheduler
+  warmup_ratio: 0.01
+  decay_ratio: 0.10
 
 # =============================================================================
 # Data (common settings)
