@@ -10,6 +10,7 @@ tokenizers>=0.13.0
 omegaconf>=2.3.0
 wandb>=0.15.0
 accelerate
+huggingface_hub
 
 # ML/Data libraries
 scikit-learn>=1.6.0
