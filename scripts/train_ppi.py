@@ -76,23 +76,7 @@ def main():
     # Convert esm_hidden_sizes to dict
     esm_hidden_sizes = OmegaConf.to_container(config.esm_hidden_sizes, resolve=True)
 
-    # Create training config
-    training_config = PPITrainingConfig(
-        encoder_lr=config.training.encoder_lr,
-        head_lr=config.training.head_lr,
-        weight_decay=config.training.weight_decay,
-        max_epochs=config.training.max_epochs,
-        early_stopping_patience=config.training.early_stopping_patience,
-        mlp_dropout=config.model.head.dropout,
-        num_classes=config.model.head.num_classes,
-        freeze_drug_encoder=config.model.drug_encoder.freeze,
-        freeze_target_encoder=config.model.target_encoder.freeze,
-        use_cached_embeddings=config.training.use_cached_embeddings,
-        target_encoder=config.model.target_encoder.pretrained_path,
-        esm_hidden_sizes=esm_hidden_sizes,
-        prediction_threshold=config.classification.prediction_threshold,
-        evidence_lambda_coeff=config.evidence.lambda_coeff,
-    )
+    # Training config will be created after datamodule setup (need total_steps)
 
     # Create data config
     data_config = PPIDataConfig(
@@ -145,6 +129,35 @@ def main():
     )
     datamodule = PPIDataModule(config=data_config, drug_tokenizer=drug_tokenizer)
 
+    # Generate embedding cache before setup (setup loads cached embeddings)
+    datamodule.prepare_data()
+
+    # Calculate total steps for WSD scheduler
+    datamodule.setup("fit")
+    steps_per_epoch = len(datamodule.train_dataloader())
+    total_steps = steps_per_epoch * config.training.max_epochs
+    logger.info(f"WSD scheduler: {total_steps} total steps ({steps_per_epoch} steps/epoch × {config.training.max_epochs} epochs)")
+
+    # Create training config
+    training_config = PPITrainingConfig(
+        encoder_lr=config.training.encoder_lr,
+        head_lr=config.training.head_lr,
+        weight_decay=config.training.weight_decay,
+        max_epochs=config.training.max_epochs,
+        mlp_dropout=config.model.head.dropout,
+        num_classes=config.model.head.num_classes,
+        freeze_drug_encoder=config.model.drug_encoder.freeze,
+        freeze_target_encoder=config.model.target_encoder.freeze,
+        use_cached_embeddings=config.training.use_cached_embeddings,
+        target_encoder=config.model.target_encoder.pretrained_path,
+        esm_hidden_sizes=esm_hidden_sizes,
+        prediction_threshold=config.classification.prediction_threshold,
+        evidence_lambda_coeff=config.evidence.lambda_coeff,
+        total_steps=total_steps,
+        warmup_ratio=config.training.warmup_ratio,
+        decay_ratio=config.training.decay_ratio,
+    )
+
     # Create model
     model = HELMGLaMLightning(
         drug_model_path=config.model.drug_encoder.pretrained_path,
@@ -157,7 +170,6 @@ def main():
     display_config = config_to_display_config(config)
     callbacks = create_callbacks(
         checkpoint_dir,
-        config.training.early_stopping_patience,
         checkpoint_config,
         display_config,
     )

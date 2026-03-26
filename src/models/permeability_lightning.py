@@ -41,11 +41,13 @@ class PermeabilityTrainingConfig:
     weight_decay: float
     freeze_encoder: bool
     max_epochs: int
-    early_stopping_patience: int
     classifier_dropout: float
     classifier_num_layers: int
     encoder_attribute_name: str
     evidence_lambda_coeff: float
+    total_steps: int = 0
+    warmup_ratio: float = 0.01
+    decay_ratio: float = 0.10
 
 
 class HELMBertPermeabilityLightning(L.LightningModule):
@@ -283,8 +285,8 @@ class HELMBertPermeabilityLightning(L.LightningModule):
         if prefix == "val" and "aleatoric" in outputs[0]:
             all_aleatoric = torch.cat([x["aleatoric"] for x in outputs])
             all_epistemic = torch.cat([x["epistemic"] for x in outputs])
-            self.log("val_mean_aleatoric", all_aleatoric.mean())
-            self.log("val_mean_epistemic", all_epistemic.mean())
+            self.log("val_mean_aleatoric", all_aleatoric.mean(), sync_dist=True)
+            self.log("val_mean_epistemic", all_epistemic.mean(), sync_dist=True)
 
         outputs.clear()
 
@@ -293,12 +295,14 @@ class HELMBertPermeabilityLightning(L.LightningModule):
         prog_bar = prefix == "val"
         for metric_name, metric_value in metrics.items():
             if not np.isnan(metric_value):
-                self.log(f"{prefix}_{metric_name}", metric_value, prog_bar=prog_bar)
+                self.log(f"{prefix}_{metric_name}", metric_value, prog_bar=prog_bar, sync_dist=True)
 
         logger.info(f"{prefix} - RMSE: {metrics['rmse']:.4f}, R²: {metrics['r2']:.4f}")
 
     def configure_optimizers(self) -> Dict[str, Any]:
-        """Configure optimizers with differential learning rates."""
+        """Configure optimizers with differential learning rates and WSD scheduler."""
+        from src.utils.scheduler import create_wsd_scheduler
+
         param_groups = []
 
         # Only include encoder params if not frozen
@@ -317,16 +321,18 @@ class HELMBertPermeabilityLightning(L.LightningModule):
             param_groups, weight_decay=self.training_config.weight_decay
         )
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        scheduler = create_wsd_scheduler(
             optimizer,
-            T_max=self.training_config.max_epochs,
+            total_steps=self.training_config.total_steps,
+            warmup_ratio=self.training_config.warmup_ratio,
+            decay_ratio=self.training_config.decay_ratio,
         )
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "interval": "epoch",
+                "interval": "step",
             },
         }
 

@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 import lightning as L
 import torch
 from lightning.pytorch.callbacks import (
-    EarlyStopping,
     LearningRateMonitor,
     ModelCheckpoint,
     RichModelSummary,
@@ -289,7 +288,6 @@ def setup_logging(output_dir: Path, timestamp: str, name: str) -> logging.Logger
 
 def create_callbacks(
     checkpoint_dir: Path,
-    early_stopping_patience: int,
     checkpoint_config: CheckpointConfig,
     display_config: DisplayConfig,
 ) -> list[Callback]:
@@ -297,14 +295,13 @@ def create_callbacks(
 
     Args:
         checkpoint_dir: Directory to save checkpoints
-        early_stopping_patience: Patience for early stopping (0 to disable)
         checkpoint_config: Checkpoint configuration from YAML
         display_config: Display configuration from YAML
 
     Returns:
         List of Lightning callbacks
     """
-    callbacks = [
+    return [
         ModelCheckpoint(
             dirpath=checkpoint_dir,
             filename=checkpoint_config.filename_pattern,
@@ -314,22 +311,10 @@ def create_callbacks(
             save_last=checkpoint_config.save_last,
             verbose=True,
         ),
-        LearningRateMonitor(logging_interval="epoch"),
+        LearningRateMonitor(logging_interval="step"),
         RichProgressBar(leave=True),
         RichModelSummary(max_depth=display_config.model_summary_max_depth),
     ]
-
-    if early_stopping_patience > 0:
-        callbacks.append(
-            EarlyStopping(
-                monitor=checkpoint_config.monitor,
-                patience=early_stopping_patience,
-                mode=checkpoint_config.mode,
-                verbose=True,
-            )
-        )
-
-    return callbacks
 
 
 def create_output_dirs(base_dir: Path, run_name: str) -> tuple[Path, Path]:
