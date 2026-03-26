@@ -89,7 +89,7 @@ batch_keys:
 # =============================================================================
 cache:
   drug_encoder_name: helmbert
-  target_encoder_name: esm2
+  target_encoder_name: esm2_650m
   dataset_type: ppi
 
 # =============================================================================
