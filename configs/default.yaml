@@ -28,7 +28,7 @@ training:
   gradient_clip_val: 1.0
   # WSD (Warmup-Stable-Decay) scheduler
   warmup_ratio: 0.01
-  decay_ratio: 0.10
+  decay_ratio: 0.20
 
 # =============================================================================
 # Data (common settings)

@@ -199,9 +199,8 @@ def main():
 
     training_duration = time.time() - start_time
 
-    # Load best checkpoint
-    logger.info(f"Loading best model from: {trainer.checkpoint_callback.best_model_path}")
-    model = load_best_checkpoint(trainer, HELMBertMLMLightning, strict=True)
+    # Use final model (WSD: stable phase explores, decay phase settles)
+    logger.info("Using final model after WSD decay phase")
 
     # Save model in HuggingFace format
     hf_checkpoint_dir = Path(config.paths.checkpoint_dir) / config.paths.hf_checkpoint_name

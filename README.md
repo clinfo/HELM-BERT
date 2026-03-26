@@ -185,7 +185,7 @@ The `evidence.lambda_coeff` controls the regularization strength between task lo
 
 | R² | Pearson | RMSE | MAE |
 |:--:|:-------:|:----:|:---:|
-| 0.758 | 0.871 | 0.384 | 0.283 |
+| 0.759 | 0.872 | 0.383 | 0.277 |
 
 Train/test 9:1, val 10% from train.
 
@@ -193,8 +193,8 @@ Train/test 9:1, val 10% from train.
 
 | Split | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
 |:-----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 0.964 | 0.886 | 0.826 | 0.784 | 0.887 |
-| aCSM | 0.870 | 0.700 | 0.608 | 0.549 | 0.734 |
+| Random | 0.970 | 0.913 | 0.860 | 0.824 | 0.912 |
+| aCSM | 0.876 | 0.717 | 0.597 | 0.552 | 0.723 |
 
 Train/test 8:2, val 10% from train, 1:4 positive:negative ratio.
 - **Random**: random split

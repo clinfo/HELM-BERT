@@ -129,6 +129,9 @@ def main():
     )
     datamodule = PPIDataModule(config=data_config, drug_tokenizer=drug_tokenizer)
 
+    # Generate embedding cache before setup (setup loads cached embeddings)
+    datamodule.prepare_data()
+
     # Calculate total steps for WSD scheduler
     datamodule.setup("fit")
     steps_per_epoch = len(datamodule.train_dataloader())
