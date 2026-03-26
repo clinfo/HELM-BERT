@@ -39,7 +39,6 @@ model:
 # Training
 # =============================================================================
 training:
-  max_epochs: 200
   batch_size: 32
   encoder_lr: 3.0e-5
   head_lr: 1.0e-4

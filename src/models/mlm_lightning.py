@@ -26,8 +26,10 @@ class MLMTrainingConfig:
     learning_rate: float
     weight_decay: float
     max_epochs: int
-    early_stopping_patience: int
     ignore_index: int
+    total_steps: int = 0
+    warmup_ratio: float = 0.01
+    decay_ratio: float = 0.10
 
 
 class HELMBertMLMLightning(L.LightningModule):
@@ -145,15 +147,9 @@ class HELMBertMLMLightning(L.LightningModule):
         else:
             accuracy = torch.tensor(0.0, device=loss.device)
 
-        self.log(
-            "train_loss", loss, prog_bar=True, batch_size=batch["input_ids"].size(0)
-        )
-        self.log(
-            "train_accuracy",
-            accuracy,
-            prog_bar=True,
-            batch_size=batch["input_ids"].size(0),
-        )
+        batch_size = batch["input_ids"].size(0)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        self.log("train_accuracy", accuracy, on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
 
         return loss
 
@@ -174,39 +170,32 @@ class HELMBertMLMLightning(L.LightningModule):
         else:
             accuracy = torch.tensor(0.0, device=loss.device)
 
-        self.log(
-            "val_loss",
-            loss,
-            prog_bar=True,
-            sync_dist=True,
-            batch_size=batch["input_ids"].size(0),
-        )
-        self.log(
-            "val_accuracy",
-            accuracy,
-            prog_bar=True,
-            sync_dist=True,
-            batch_size=batch["input_ids"].size(0),
-        )
+        batch_size = batch["input_ids"].size(0)
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True, batch_size=batch_size)
+        self.log("val_accuracy", accuracy, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True, batch_size=batch_size)
 
     def configure_optimizers(self) -> Dict[str, Any]:
-        """Configure optimizer and scheduler."""
+        """Configure optimizer and WSD scheduler."""
+        from src.utils.scheduler import create_wsd_scheduler
+
         optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=self.training_config.learning_rate,
             weight_decay=self.training_config.weight_decay,
         )
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        scheduler = create_wsd_scheduler(
             optimizer,
-            T_max=self.training_config.max_epochs,
+            total_steps=self.training_config.total_steps,
+            warmup_ratio=self.training_config.warmup_ratio,
+            decay_ratio=self.training_config.decay_ratio,
         )
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "interval": "epoch",
+                "interval": "step",
             },
         }
 

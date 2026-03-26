@@ -70,19 +70,7 @@ def main():
     logger = setup_logging(output_dir, timestamp, "train_permeability")
     log_header(logger, "Permeability Evidential Regression Training")
 
-    # Create training config
-    training_config = PermeabilityTrainingConfig(
-        encoder_lr=config.training.encoder_lr,
-        head_lr=config.training.head_lr,
-        weight_decay=config.training.weight_decay,
-        freeze_encoder=config.model.freeze_encoder,
-        max_epochs=config.training.max_epochs,
-        early_stopping_patience=config.training.early_stopping_patience,
-        classifier_dropout=config.model.classifier.dropout,
-        classifier_num_layers=config.model.classifier.num_layers,
-        encoder_attribute_name=config.model.encoder_attribute_name,
-        evidence_lambda_coeff=config.evidence.lambda_coeff,
-    )
+    # Training config will be created after datamodule setup (need total_steps)
 
     # Create data config
     data_config = PermeabilityDataConfig(
@@ -121,6 +109,28 @@ def main():
     )
     datamodule = PermeabilityDataModule(config=data_config, tokenizer=tokenizer)
 
+    # Calculate total steps for WSD scheduler
+    datamodule.setup("fit")
+    steps_per_epoch = len(datamodule.train_dataloader())
+    total_steps = steps_per_epoch * config.training.max_epochs
+    logger.info(f"WSD scheduler: {total_steps} total steps ({steps_per_epoch} steps/epoch × {config.training.max_epochs} epochs)")
+
+    # Create training config
+    training_config = PermeabilityTrainingConfig(
+        encoder_lr=config.training.encoder_lr,
+        head_lr=config.training.head_lr,
+        weight_decay=config.training.weight_decay,
+        freeze_encoder=config.model.freeze_encoder,
+        max_epochs=config.training.max_epochs,
+        classifier_dropout=config.model.classifier.dropout,
+        classifier_num_layers=config.model.classifier.num_layers,
+        encoder_attribute_name=config.model.encoder_attribute_name,
+        evidence_lambda_coeff=config.evidence.lambda_coeff,
+        total_steps=total_steps,
+        warmup_ratio=config.training.warmup_ratio,
+        decay_ratio=config.training.decay_ratio,
+    )
+
     # Create model
     model = HELMBertPermeabilityLightning(
         model_name_or_path=config.model.pretrained_path,
@@ -133,7 +143,6 @@ def main():
     display_config = config_to_display_config(config)
     callbacks = create_callbacks(
         checkpoint_dir,
-        config.training.early_stopping_patience,
         checkpoint_config,
         display_config,
     )

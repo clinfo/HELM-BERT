@@ -67,15 +67,6 @@ def main():
     title = "HELM-BERT MLM Pretraining (from scratch)" if config.model.from_scratch else "HELM-BERT MLM Continue Pre-training"
     log_header(logger, title)
 
-    # Create training config
-    training_config = MLMTrainingConfig(
-        learning_rate=config.training.learning_rate,
-        weight_decay=config.training.weight_decay,
-        max_epochs=config.training.max_epochs,
-        early_stopping_patience=config.training.early_stopping_patience,
-        ignore_index=config.mlm.ignore_index,
-    )
-
     # Create data config
     datasets = [
         DatasetInfo(name=ds.name, file=ds.file, helm_column=ds.helm_column)
@@ -144,6 +135,23 @@ def main():
     )
     datamodule = MLMDataModule(config=data_config, tokenizer=tokenizer)
 
+    # Calculate total steps for WSD scheduler
+    datamodule.setup("fit")
+    steps_per_epoch = len(datamodule.train_dataloader())
+    total_steps = steps_per_epoch * config.training.max_epochs
+    logger.info(f"WSD scheduler: {total_steps} total steps ({steps_per_epoch} steps/epoch × {config.training.max_epochs} epochs)")
+
+    # Create training config
+    training_config = MLMTrainingConfig(
+        learning_rate=config.training.learning_rate,
+        weight_decay=config.training.weight_decay,
+        max_epochs=config.training.max_epochs,
+        ignore_index=config.mlm.ignore_index,
+        total_steps=total_steps,
+        warmup_ratio=config.training.warmup_ratio,
+        decay_ratio=config.training.decay_ratio,
+    )
+
     # Create model
     model = HELMBertMLMLightning(
         model_name_or_path=config.model.pretrained_path,
@@ -159,7 +167,6 @@ def main():
     display_config = config_to_display_config(config)
     callbacks = create_callbacks(
         checkpoint_dir,
-        config.training.early_stopping_patience,
         checkpoint_config,
         display_config,
     )
@@ -192,9 +199,8 @@ def main():
 
     training_duration = time.time() - start_time
 
-    # Load best checkpoint
-    logger.info(f"Loading best model from: {trainer.checkpoint_callback.best_model_path}")
-    model = load_best_checkpoint(trainer, HELMBertMLMLightning, strict=True)
+    # Use final model (WSD: stable phase explores, decay phase settles)
+    logger.info("Using final model after WSD decay phase")
 
     # Save model in HuggingFace format
     hf_checkpoint_dir = Path(config.paths.checkpoint_dir) / config.paths.hf_checkpoint_name

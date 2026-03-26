@@ -221,3 +221,4 @@ huggingface_upload/model.safetensors
 # Ignore all hidden files and directories (except .gitignore)
 .*
 !.gitignore
+UPLOAD.md

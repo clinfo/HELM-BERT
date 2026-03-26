@@ -44,7 +44,6 @@ class PPITrainingConfig:
     head_lr: float
     weight_decay: float
     max_epochs: int
-    early_stopping_patience: int
     mlp_dropout: float
     num_classes: int
     freeze_drug_encoder: bool
@@ -54,6 +53,9 @@ class PPITrainingConfig:
     esm_hidden_sizes: Dict[str, int]
     prediction_threshold: float
     evidence_lambda_coeff: float
+    total_steps: int = 0
+    warmup_ratio: float = 0.01
+    decay_ratio: float = 0.10
 
 
 class HELMGLaMLightning(L.LightningModule):
@@ -410,7 +412,7 @@ class HELMGLaMLightning(L.LightningModule):
         # Log mean uncertainty (validation only)
         if prefix == "val" and "uncertainty" in outputs[0]:
             all_uncertainty = torch.cat([x["uncertainty"] for x in outputs])
-            self.log("val_mean_uncertainty", all_uncertainty.mean())
+            self.log("val_mean_uncertainty", all_uncertainty.mean(), sync_dist=True)
 
         outputs.clear()
 
@@ -421,7 +423,7 @@ class HELMGLaMLightning(L.LightningModule):
         prog_bar = prefix == "val"
         for name, value in metrics.items():
             if not np.isnan(value):
-                self.log(f"{prefix}_{name}", value, prog_bar=prog_bar)
+                self.log(f"{prefix}_{name}", value, prog_bar=prog_bar, sync_dist=True)
 
         logger.info(
             f"{prefix} - ROC-AUC: {metrics['roc_auc']:.4f}, PR-AUC: {metrics['pr_auc']:.4f}, "
@@ -429,7 +431,9 @@ class HELMGLaMLightning(L.LightningModule):
         )
 
     def configure_optimizers(self) -> Dict[str, Any]:
-        """Configure optimizer with differential learning rates."""
+        """Configure optimizer with differential learning rates and WSD scheduler."""
+        from src.utils.scheduler import create_wsd_scheduler
+
         head_params = list(self.mlp_net.parameters())
 
         # Collect encoder params
@@ -456,13 +460,16 @@ class HELMGLaMLightning(L.LightningModule):
         optimizer = torch.optim.AdamW(
             param_groups, weight_decay=self.training_config.weight_decay
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.training_config.max_epochs
+        scheduler = create_wsd_scheduler(
+            optimizer,
+            total_steps=self.training_config.total_steps,
+            warmup_ratio=self.training_config.warmup_ratio,
+            decay_ratio=self.training_config.decay_ratio,
         )
 
         return {
             "optimizer": optimizer,
-            "lr_scheduler": {"scheduler": scheduler, "interval": "epoch"},
+            "lr_scheduler": {"scheduler": scheduler, "interval": "step"},
         }
 
     def save_pretrained(self, save_directory: str) -> None:
