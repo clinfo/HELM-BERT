@@ -193,8 +193,8 @@ Train/test 9:1, val 10% from train.
 
 | Split | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
 |:-----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 0.970 | 0.913 | 0.860 | 0.824 | 0.912 |
-| aCSM | 0.876 | 0.717 | 0.597 | 0.552 | 0.723 |
+| Random | 0.971 | 0.914 | 0.853 | 0.816 | 0.912 |
+| aCSM | 0.879 | 0.714 | 0.591 | 0.539 | 0.722 |
 
 Train/test 8:2, val 10% from train, 1:4 positive:negative ratio.
 - **Random**: random split
