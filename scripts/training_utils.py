@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -208,6 +209,16 @@ def parse_argparse_overrides(argv: List[str], task: str) -> List[str]:
     return overrides
 
 
+def get_model_tag(config: DictConfig) -> str:
+    """Extract model tag from config for run naming.
+
+    Handles both single-encoder (permeability) and dual-encoder (PPI) configs.
+    """
+    drug_path = OmegaConf.select(config, "model.drug_encoder.pretrained_path")
+    path = drug_path or config.model.pretrained_path
+    return Path(path).name
+
+
 def to_dict(config: DictConfig) -> dict:
     """Convert OmegaConf config to plain dictionary."""
     return OmegaConf.to_container(config, resolve=True)
@@ -253,13 +264,18 @@ def config_to_display_config(config: DictConfig) -> "DisplayConfig":
     )
 
 
-def setup_training_env(seed: int, matmul_precision: str) -> None:
+def setup_training_env(seed: int, matmul_precision: str, deterministic: bool) -> None:
     """Setup training environment with seed and matmul precision.
 
     Args:
         seed: Random seed for reproducibility
         matmul_precision: Float32 matmul precision ("highest", "high", "medium")
+        deterministic: Whether deterministic CUDA algorithms are required
     """
+    if deterministic:
+        # Required for deterministic CuBLAS kernels on CUDA >= 10.2.
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
     L.seed_everything(seed, workers=True)
     torch.set_float32_matmul_precision(matmul_precision)
 

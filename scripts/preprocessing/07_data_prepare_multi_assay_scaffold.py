@@ -17,7 +17,7 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 import lightning as L
-from rdkit.Chem.Scaffolds import MurckoScaffold
+from src.utils import build_scaffold_groups, flatten_groups, greedy_scaffold_partition
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = REPO_ROOT / "data/mlm/cycpeptmpdb_deduplicated.csv"
@@ -62,72 +62,118 @@ def setup_logging(log_base: Path = DEFAULT_LOG_DIR) -> Tuple[logging.Logger, Pat
     return logger, log_dir
 
 
-def generate_scaffold(smiles: str) -> str:
-    """Generate Murcko scaffold from SMILES. Returns empty string on failure."""
-    try:
-        return MurckoScaffold.MurckoScaffoldSmiles(smiles=smiles, includeChirality=False)
-    except Exception:
-        return ""
+def _group_category_counts(df: pd.DataFrame, indices: List[int], assay_cols: List[str]) -> Tuple[int, int, int]:
+    """Return counts for (pampa_only, caco2_only, both) within a scaffold group."""
+    group = df.iloc[indices].loc[:, assay_cols]
+    has_pampa = group.iloc[:, 0].notna()
+    has_caco2 = group.iloc[:, 1].notna()
+    both = int((has_pampa & has_caco2).sum())
+    pampa_only = int((has_pampa & ~has_caco2).sum())
+    caco2_only = int((has_caco2 & ~has_pampa).sum())
+    return pampa_only, caco2_only, both
 
 
-def _greedy_assign(
-    groups: List[List[int]], target_test_size: int
-) -> Tuple[List[int], List[int]]:
-    """Assign scaffold groups to train/test via greedy largest-first."""
-    sorted_groups = sorted(groups, key=len, reverse=True)
-    test_indices: List[int] = []
-    train_indices: List[int] = []
-    for group in sorted_groups:
-        if len(test_indices) < target_test_size:
-            test_indices.extend(group)
-        else:
-            train_indices.extend(group)
-    return train_indices, test_indices
+def _dataset_category_counts(df: pd.DataFrame, assay_cols: List[str]) -> Tuple[int, int, int]:
+    """Return counts for the full dataset."""
+    assay_frame = df.loc[:, assay_cols]
+    has_pampa = assay_frame.iloc[:, 0].notna()
+    has_caco2 = assay_frame.iloc[:, 1].notna()
+    both = int((has_pampa & has_caco2).sum())
+    pampa_only = int((has_pampa & ~has_caco2).sum())
+    caco2_only = int((has_caco2 & ~has_pampa).sum())
+    return int(pampa_only), int(caco2_only), int(both)
+
+
+def _combine_counts(
+    current: Tuple[int, int, int], added: Tuple[int, int, int]
+) -> Tuple[int, int, int]:
+    """Combine category counts."""
+    return tuple(a + b for a, b in zip(current, added))
+
+
+def _composition_key(
+    size: int,
+    counts: Tuple[int, int, int],
+    total_size: int,
+    total_counts: Tuple[int, int, int],
+    target_test_size: int,
+) -> Tuple[float, ...]:
+    """Return a deterministic key for how close the test set is to target composition."""
+    category_order = sorted(range(len(total_counts)), key=lambda idx: total_counts[idx])
+    category_gaps = [
+        abs(counts[idx] - ((total_counts[idx] * target_test_size) / total_size))
+        if total_counts[idx] > 0 else 0.0
+        for idx in category_order
+    ]
+
+    return (
+        *category_gaps,
+        abs(size - target_test_size),
+    )
 
 
 def scaffold_split(
     df: pd.DataFrame, smiles_col: str, assay_cols: List[str], test_ratio: float
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Split by Murcko scaffold with assay-stratified allocation.
+    """Split by scaffold while preserving assay composition as closely as possible."""
+    groups = build_scaffold_groups(df[smiles_col].tolist())
+    logger.info(f"Found {len(groups)} unique scaffolds from {len(df)} molecules")
 
-    Scaffolds are partitioned by whether they contain the minority assay.
-    Each partition is independently split at the target ratio, ensuring
-    both assays are represented in train and test.
-    """
-    scaffold_to_indices: Dict[str, List[int]] = {}
-    for i, smiles in enumerate(df[smiles_col]):
-        scaffold = generate_scaffold(smiles)
-        scaffold_to_indices.setdefault(scaffold, []).append(i)
-
-    logger.info(f"Found {len(scaffold_to_indices)} unique scaffolds from {len(df)} molecules")
-
-    minority_col = min(assay_cols, key=lambda c: df[c].notna().sum())
-    logger.info(f"Minority assay for stratification: {minority_col}")
-
-    minority_groups: List[List[int]] = []
-    majority_groups: List[List[int]] = []
-    for indices in scaffold_to_indices.values():
-        if df.iloc[indices][minority_col].notna().any():
-            minority_groups.append(indices)
-        else:
-            majority_groups.append(indices)
-
-    n_minority = sum(len(g) for g in minority_groups)
-    n_majority = sum(len(g) for g in majority_groups)
+    total_counts = _dataset_category_counts(df, assay_cols)
     logger.info(
-        f"Scaffold partitions: {len(minority_groups)} with {minority_col} "
-        f"({n_minority} samples), {len(majority_groups)} without ({n_majority} samples)"
+        "Assay composition totals: "
+        f"pampa_only={total_counts[0]}, caco2_only={total_counts[1]}, both={total_counts[2]}"
+    )
+    target_test_size = round(len(df) * test_ratio)
+    category_order = sorted(range(len(total_counts)), key=lambda idx: total_counts[idx])
+    grouped = [
+        (group, _group_category_counts(df, group, assay_cols))
+        for group in groups
+    ]
+    grouped.sort(
+        key=lambda item: (
+            *[
+                (item[1][cat_idx] > 0, item[1][cat_idx])
+                for cat_idx in category_order
+            ],
+            len(item[0]),
+            -item[0][0],
+        ),
+        reverse=True,
+    )
+    groups = [group for group, _ in grouped]
+    group_states = [counts for _, counts in grouped]
+    empty_counts = (0, 0, 0)
+
+    test_groups, train_groups, test_size, test_counts = greedy_scaffold_partition(
+        groups=groups,
+        group_states=group_states,
+        target_test_size=target_test_size,
+        empty_state=empty_counts,
+        combine_states=_combine_counts,
+        key_fn=lambda size, counts, target: _composition_key(
+            size=size,
+            counts=counts,
+            total_size=len(df),
+            total_counts=total_counts,
+            target_test_size=target,
+        ),
     )
 
-    min_train, min_test = _greedy_assign(minority_groups, int(n_minority * test_ratio))
-    maj_train, maj_test = _greedy_assign(majority_groups, int(n_majority * test_ratio))
-
-    train_indices = min_train + maj_train
-    test_indices = min_test + maj_test
+    test_indices = flatten_groups(test_groups)
+    train_indices = flatten_groups(train_groups)
 
     train_df = df.iloc[train_indices].reset_index(drop=True)
     test_df = df.iloc[test_indices].reset_index(drop=True)
 
+    logger.info(
+        f"Selected test set: {len(test_groups)} scaffold groups, "
+        f"{len(test_df)} samples ({len(test_df)/len(df):.3f} of dataset)"
+    )
+    logger.info(
+        "Test composition: "
+        f"pampa_only={test_counts[0]}, caco2_only={test_counts[1]}, both={test_counts[2]}"
+    )
     logger.info(
         f"Scaffold split: {len(train_df)} train, {len(test_df)} test "
         f"(actual test ratio: {len(test_df)/len(df):.3f})"
@@ -168,8 +214,9 @@ def main():
         raise ValueError(f"Missing required columns: {missing_cols}")
 
     # Keep rows with at least one valid assay value
-    has_any_assay = df[ASSAY_COLS].notna().any(axis=1)
-    df_filtered = df[has_any_assay].copy()
+    assay_frame = df.loc[:, ASSAY_COLS].copy()
+    has_any_assay = assay_frame.notna().any(axis=1)
+    df_filtered = df.loc[has_any_assay].copy()
     logger.info(f"Rows with at least one assay value: {len(df_filtered)}")
 
     # Filter invalid values per assay
@@ -181,17 +228,19 @@ def main():
             logger.info(f"Set {n_invalid} invalid {col} values (<= {INVALID_THRESHOLD}) to NaN")
 
     # Drop rows that lost all assay values
-    has_any_assay = df_filtered[ASSAY_COLS].notna().any(axis=1)
-    df_filtered = df_filtered[has_any_assay].copy()
+    filtered_assay_frame = df_filtered.loc[:, ASSAY_COLS].copy()
+    has_any_assay = filtered_assay_frame.notna().any(axis=1)
+    df_filtered = df_filtered.loc[has_any_assay].copy()
     logger.info(f"After invalid filtering: {len(df_filtered)} samples")
 
+    filtered_assay_frame = df_filtered.loc[:, ASSAY_COLS].copy()
     for col in ASSAY_COLS:
-        logger.info(f"  {col}: {df_filtered[col].notna().sum()} valid values")
-    both_valid = df_filtered[ASSAY_COLS].notna().all(axis=1)
+        logger.info(f"  {col}: {filtered_assay_frame.loc[:, col].notna().sum()} valid values")
+    both_valid = filtered_assay_frame.notna().all(axis=1)
     logger.info(f"  Both PAMPA+Caco2: {both_valid.sum()} rows")
 
     # Sort for deterministic processing
-    df_filtered = df_filtered.sort_values(by=[HELM_COL, SMILES_COL]).reset_index(drop=True)
+    df_filtered = df_filtered.sort_values([HELM_COL, SMILES_COL]).reset_index(drop=True)
 
     # Scaffold-based split (stratified by minority assay)
     train_df, test_df = scaffold_split(df_filtered, SMILES_COL, ASSAY_COLS, args.test_ratio)

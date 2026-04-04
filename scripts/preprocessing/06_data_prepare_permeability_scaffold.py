@@ -12,11 +12,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import argparse
 import logging
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
-import pandas as pd
 import lightning as L
-from rdkit.Chem.Scaffolds import MurckoScaffold
+import pandas as pd
+from src.utils import build_scaffold_groups, flatten_groups, greedy_scaffold_partition
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = REPO_ROOT / "data/mlm/cycpeptmpdb_deduplicated.csv"
@@ -61,45 +61,39 @@ def setup_logging(log_base: Path = DEFAULT_LOG_DIR) -> Tuple[logging.Logger, Pat
     return logger, log_dir
 
 
-def generate_scaffold(smiles: str) -> str:
-    """Generate Murcko scaffold from SMILES. Returns empty string on failure."""
-    try:
-        return MurckoScaffold.MurckoScaffoldSmiles(smiles=smiles, includeChirality=False)
-    except Exception:
-        return ""
+def _size_only_key(test_size: int, _: Tuple[()], target_test_size: int) -> Tuple[float]:
+    """Key for single-task scaffold assignment: size only, no label information."""
+    return (abs(test_size - target_test_size),)
 
 
 def scaffold_split(
     df: pd.DataFrame, smiles_col: str, test_ratio: float
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Split DataFrame by Murcko scaffold, keeping same scaffold in one set.
+    """Split by scaffold using direct size-balanced assignment."""
+    groups = build_scaffold_groups(df[smiles_col].tolist())
+    logger.info(f"Found {len(groups)} unique scaffolds from {len(df)} molecules")
+    target_test_size = round(len(df) * test_ratio)
+    empty_state: Tuple[()] = tuple()
 
-    Scaffold groups are sorted largest-first and greedily assigned to the test
-    set until the target ratio is reached.
-    """
-    scaffold_to_indices: Dict[str, List[int]] = {}
-    for i, smiles in enumerate(df[smiles_col]):
-        scaffold = generate_scaffold(smiles)
-        scaffold_to_indices.setdefault(scaffold, []).append(i)
+    test_groups, train_groups, test_size, _ = greedy_scaffold_partition(
+        groups=groups,
+        group_states=[empty_state] * len(groups),
+        target_test_size=target_test_size,
+        empty_state=empty_state,
+        combine_states=lambda current, _: current,
+        key_fn=_size_only_key,
+    )
 
-    n_scaffolds = len(scaffold_to_indices)
-    logger.info(f"Found {n_scaffolds} unique scaffolds from {len(df)} molecules")
-
-    # Largest groups first for greedy bin-packing
-    sorted_groups = sorted(scaffold_to_indices.values(), key=len, reverse=True)
-
-    target_test_size = int(len(df) * test_ratio)
-    test_indices, train_indices = [], []
-
-    for group in sorted_groups:
-        if len(test_indices) < target_test_size:
-            test_indices.extend(group)
-        else:
-            train_indices.extend(group)
+    test_indices = flatten_groups(test_groups)
+    train_indices = flatten_groups(train_groups)
 
     train_df = df.iloc[train_indices].reset_index(drop=True)
     test_df = df.iloc[test_indices].reset_index(drop=True)
 
+    logger.info(
+        f"Selected test set: {len(test_groups)} scaffold groups, "
+        f"{test_size} samples ({test_size/len(df):.3f} of dataset)"
+    )
     logger.info(
         f"Scaffold split: {len(train_df)} train, {len(test_df)} test "
         f"(actual test ratio: {len(test_df)/len(df):.3f})"
