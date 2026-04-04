@@ -2,7 +2,6 @@
 """Visualize permeability train/val/test split distributions via t-SNE.
 
 Uses Morgan fingerprints (ECFP4) from SMILES to embed molecules into 2D.
-Mirrors the format of visualize_ppi_splits.py.
 
 Usage:
     # Combined figure: Random + Scaffold side by side (default)
@@ -23,13 +22,13 @@ Output:
 
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import argparse
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,10 +40,6 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS_DIR = REPO_ROOT / "results" / "visualization"
@@ -63,8 +58,8 @@ ALL_SPLITS: List[Dict[str, str]] = [
     {
         "name": "Random Split",
         "tag": "random",
-        "train_file": "data/downstream/cycpeptmpdb_permeability_train.csv",
-        "test_file": "data/downstream/cycpeptmpdb_permeability_test.csv",
+        "train_file": "data/downstream/cycpeptmpdb_permeability_random_train.csv",
+        "test_file": "data/downstream/cycpeptmpdb_permeability_random_test.csv",
     },
     {
         "name": "Scaffold Split",
@@ -74,7 +69,6 @@ ALL_SPLITS: List[Dict[str, str]] = [
     },
 ]
 
-# Plot style
 sns.set_style("whitegrid")
 sns.set_context("paper", font_scale=1.5)
 plt.rcParams["figure.dpi"] = 300
@@ -103,33 +97,29 @@ def setup_logging(log_dir: Path) -> logging.Logger:
         (logging.StreamHandler, (sys.stdout,)),
         (logging.FileHandler, (log_file,)),
     ]:
-        h = handler_cls(*args)
-        h.setLevel(LOG_LEVEL)
-        h.setFormatter(logging.Formatter(LOG_FORMAT))
-        lg.addHandler(h)
+        handler = handler_cls(*args)
+        handler.setLevel(LOG_LEVEL)
+        handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        lg.addHandler(handler)
 
     lg.info(f"Log file: {log_file.absolute()}")
     return lg
 
 
-# ---------------------------------------------------------------------------
-# Feature extraction
-# ---------------------------------------------------------------------------
-
 def smiles_to_fingerprints(smiles_list: List[str]) -> Tuple[np.ndarray, np.ndarray]:
     """Convert SMILES to Morgan fingerprints. Returns (fps, valid_indices)."""
-    gen = rdFingerprintGenerator.GetMorganGenerator(radius=FP_RADIUS, fpSize=FP_NBITS)
-    fps, valid_idx = [], []
-    for i, smi in enumerate(smiles_list):
-        mol = Chem.MolFromSmiles(smi)
+    generator = rdFingerprintGenerator.GetMorganGenerator(radius=FP_RADIUS, fpSize=FP_NBITS)
+    fingerprints, valid_idx = [], []
+    for idx, smiles in enumerate(smiles_list):
+        mol = Chem.MolFromSmiles(smiles)
         if mol is None:
             continue
-        fp = gen.GetFingerprintAsNumPy(mol)
-        fps.append(fp.astype(np.float32))
-        valid_idx.append(i)
+        fingerprint = generator.GetFingerprintAsNumPy(mol)
+        fingerprints.append(fingerprint.astype(np.float32))
+        valid_idx.append(idx)
 
-    logger.info(f"Fingerprints: {len(fps)}/{len(smiles_list)} molecules valid")
-    return np.array(fps), np.array(valid_idx)
+    logger.info(f"Fingerprints: {len(fingerprints)}/{len(smiles_list)} molecules valid")
+    return np.array(fingerprints), np.array(valid_idx)
 
 
 def run_tsne(X: np.ndarray) -> np.ndarray:
@@ -142,26 +132,26 @@ def run_tsne(X: np.ndarray) -> np.ndarray:
             f"PCA: {PCA_COMPONENTS} dims, explained variance: "
             f"{pca.explained_variance_ratio_.sum():.3f}"
         )
+
     logger.info(f"Running t-SNE on {X.shape}...")
     return TSNE(
-        n_components=2, random_state=SEED, perplexity=30,
-        init="pca", learning_rate="auto",
+        n_components=2,
+        random_state=SEED,
+        perplexity=30,
+        init="pca",
+        learning_rate="auto",
     ).fit_transform(X)
 
 
-# ---------------------------------------------------------------------------
-# Data loading
-# ---------------------------------------------------------------------------
-
-def get_split_data(
-    split_info: Dict[str, str],
-) -> Tuple[np.ndarray, np.ndarray]:
+def get_split_data(split_info: Dict[str, str]) -> Tuple[np.ndarray, np.ndarray]:
     """Load train/test CSVs, compute fingerprints, run t-SNE."""
     train_df = pd.read_csv(REPO_ROOT / split_info["train_file"])
     test_df = pd.read_csv(REPO_ROOT / split_info["test_file"])
 
     train_split, val_split = train_test_split(
-        train_df, test_size=VAL_RATIO, random_state=SEED,
+        train_df,
+        test_size=VAL_RATIO,
+        random_state=SEED,
     )
     logger.info(
         f"  Train: {len(train_split)}, Val: {len(val_split)}, Test: {len(test_df)}"
@@ -182,16 +172,12 @@ def get_split_data(
     return Z, split_labels
 
 
-# ---------------------------------------------------------------------------
-# Plot helpers
-# ---------------------------------------------------------------------------
-
-def _scatter_splits(ax, Z, split_labels, jitter: float = 0.0):
+def _scatter_splits(ax, Z: np.ndarray, split_labels: np.ndarray, jitter: float = 0.0) -> None:
     """Draw split-colored scatter on an axis."""
     rng = np.random.RandomState(SEED)
-    perm = rng.permutation(len(Z))
-    Z = Z[perm]
-    split_labels = split_labels[perm]
+    permutation = rng.permutation(len(Z))
+    Z = Z[permutation]
+    split_labels = split_labels[permutation]
 
     if jitter > 0:
         Z = Z + rng.normal(0, jitter, Z.shape)
@@ -200,14 +186,19 @@ def _scatter_splits(ax, Z, split_labels, jitter: float = 0.0):
         mask = split_labels == split
         if mask.any():
             ax.scatter(
-                Z[mask, 0], Z[mask, 1], c=SPLIT_COLORS[split],
-                alpha=0.4, s=15, edgecolors="none",
+                Z[mask, 0],
+                Z[mask, 1],
+                c=SPLIT_COLORS[split],
+                alpha=0.4,
+                s=15,
+                edgecolors="none",
             )
+
     ax.set_xlabel("t-SNE 1", fontsize=13, fontweight="bold")
     ax.set_ylabel("t-SNE 2", fontsize=13, fontweight="bold")
 
 
-def _save(fig, base: Path):
+def _save(fig, base: Path) -> None:
     """Save figure as PDF + PNG."""
     fig.savefig(f"{base}.pdf", format="pdf", bbox_inches="tight")
     fig.savefig(f"{base}.png", format="png", bbox_inches="tight")
@@ -217,27 +208,29 @@ def _save(fig, base: Path):
 
 
 def _legend_handles():
-    return [mpatches.Patch(color=SPLIT_COLORS[s], label=s) for s in ["train", "val", "test"]]
+    return [mpatches.Patch(color=SPLIT_COLORS[split], label=split) for split in ["train", "val", "test"]]
 
 
-# ---------------------------------------------------------------------------
-# Modes
-# ---------------------------------------------------------------------------
-
-def run_legend(results_dir: Path):
+def run_legend(results_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(10, 0.6))
     ax.axis("off")
     ax.legend(
-        handles=_legend_handles(), loc="center", ncol=3,
-        fontsize=13, frameon=True, shadow=True,
-        handlelength=1.5, handletextpad=0.5, columnspacing=2.0,
+        handles=_legend_handles(),
+        loc="center",
+        ncol=3,
+        fontsize=13,
+        frameon=True,
+        shadow=True,
+        handlelength=1.5,
+        handletextpad=0.5,
+        columnspacing=2.0,
     )
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     _save(fig, results_dir / f"tsne_permeability_legend_{timestamp}")
 
 
-def run_single(split_tag: str, results_dir: Path, jitter: float):
-    split_info = next(s for s in ALL_SPLITS if s["tag"] == split_tag)
+def run_single(split_tag: str, results_dir: Path, jitter: float) -> None:
+    split_info = next(split for split in ALL_SPLITS if split["tag"] == split_tag)
     logger.info(f"Processing: {split_info['name']}")
 
     Z, split_labels = get_split_data(split_info)
@@ -251,7 +244,7 @@ def run_single(split_tag: str, results_dir: Path, jitter: float):
     _save(fig, results_dir / f"tsne_permeability_{split_tag}_{timestamp}")
 
 
-def run_combined(results_dir: Path, jitter: float):
+def run_combined(results_dir: Path, jitter: float) -> None:
     panels = []
     for split_info in ALL_SPLITS:
         logger.info(f"\nProcessing: {split_info['name']}")
@@ -267,13 +260,20 @@ def run_combined(results_dir: Path, jitter: float):
         ax.set_title(subtitle, fontsize=15, fontweight="bold")
 
     fig.legend(
-        handles=_legend_handles(), loc="lower center", ncol=3,
-        fontsize=13, frameon=True, shadow=True, bbox_to_anchor=(0.5, -0.02),
+        handles=_legend_handles(),
+        loc="lower center",
+        ncol=3,
+        fontsize=13,
+        frameon=True,
+        shadow=True,
+        bbox_to_anchor=(0.5, -0.02),
         handlelength=2.5,
     )
     fig.suptitle(
         "t-SNE of Permeability Splits (Morgan Fingerprints)",
-        fontsize=16, fontweight="bold", y=1.02,
+        fontsize=16,
+        fontweight="bold",
+        y=1.02,
     )
     fig.tight_layout()
 
@@ -281,11 +281,7 @@ def run_combined(results_dir: Path, jitter: float):
     _save(fig, results_dir / f"tsne_permeability_splits_{timestamp}")
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-def main():
+def main() -> None:
     global logger
 
     parser = argparse.ArgumentParser(
@@ -301,12 +297,17 @@ def main():
         ),
     )
     parser.add_argument(
-        "--split", type=str, default=None, choices=["random", "scaffold"],
+        "--split",
+        type=str,
+        default=None,
+        choices=["random", "scaffold"],
         help="Single split to visualize. Omit for combined.",
     )
     parser.add_argument("--legend", action="store_true", help="Output legend bar only.")
     parser.add_argument(
-        "--jitter", type=float, default=JITTER_SCALE,
+        "--jitter",
+        type=float,
+        default=JITTER_SCALE,
         help=f"Jitter scale for scatter (0 = off). Default: {JITTER_SCALE}",
     )
     parser.add_argument("--results-dir", type=str, default=str(DEFAULT_RESULTS_DIR))
