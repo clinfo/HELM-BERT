@@ -6,7 +6,7 @@ A peptide language model using **HELM (Hierarchical Editing Language for Macromo
 
 ## Model Description
 
-HELM-BERT is built upon the DeBERTa architecture, designed for peptide sequences in HELM notation:
+HELM-BERT is built upon the DeBERTa architecture, pre-trained on ~75k peptides from four databases (ChEMBL, CREMP, CycPeptMPDB, Propedia) using **Masked Language Modeling (MLM)** with a **Warmup-Stable-Decay (WSD)** learning rate schedule.
 
 - **Disentangled Attention**: Decomposes attention into content-content and content-position terms
 - **Enhanced Mask Decoder (EMD)**: Injects absolute position embeddings at the decoder stage
@@ -14,6 +14,39 @@ HELM-BERT is built upon the DeBERTa architecture, designed for peptide sequences
 - **nGiE**: n-gram Induced Encoding layer (1D convolution, kernel size 3)
 
 <p align="center"><img src="assets/HELM-BERT.png" width="600"></p>
+
+### Pipeline Overview
+
+```mermaid
+graph LR
+    A[Pre-training] --> B[HELM-BERT] --> C[Permeability]
+    B --> D[Multi-Assay]
+    B --> E[PPI]
+```
+
+### Downstream Architectures
+
+```mermaid
+graph TD
+    subgraph "Permeability (Single-Assay)"
+        A[HELM] --> B[HELM-BERT] --> C["NIG Head"]
+        C --> D["pred ± uncertainty"]
+    end
+
+    subgraph "Permeability (Multi-Assay)"
+        E[HELM] --> F["HELM-BERT<br/>(shared)"]
+        F --> G[PAMPA Head]
+        F --> H[Caco-2 Head]
+    end
+
+    subgraph "PPI Classification"
+        I[HELM] --> J[HELM-BERT]
+        K[Protein] --> L[ESM-2]
+        J --> M[Concat]
+        L --> M
+        M --> N[Dirichlet Head]
+    end
+```
 
 ## Model Specifications
 
@@ -25,6 +58,9 @@ HELM-BERT is built upon the DeBERTa architecture, designed for peptide sequences
 | Attention heads | 12 |
 | Vocab size | 78 |
 | Max token length | 512 |
+| Pre-training data | ~75k peptides (ChEMBL, CREMP, CycPeptMPDB, Propedia) |
+| Pre-training objective | MLM (span masking, p=0.15) |
+| LR schedule | Warmup-Stable-Decay (WSD) |
 
 ## Installation
 
@@ -86,7 +122,7 @@ python scripts/train_mlm.py --from_scratch \
 | `model.from_scratch` | false | Train from scratch |
 | `model.architecture.hidden_size` | 768 | Hidden dimension (from_scratch only) |
 | `model.architecture.num_hidden_layers` | 6 | Number of layers (from_scratch only) |
-| `training.max_epochs` | 500 | Maximum training epochs |
+| `training.max_epochs` | 100 | Maximum training epochs |
 | `training.batch_size` | 64 | Batch size |
 | `training.learning_rate` | 1e-4 | Learning rate |
 | `data.masking.mlm_probability` | 0.15 | Masking probability |
@@ -115,7 +151,7 @@ python scripts/train_permeability.py --train_file ./data/train.csv --test_file .
 | `model.freeze_encoder` | false | Freeze encoder weights |
 | `model.classifier.num_layers` | 2 | MLP head layers |
 | `model.classifier.dropout` | 0.1 | Classifier dropout |
-| `training.max_epochs` | 200 | Maximum training epochs |
+| `training.max_epochs` | 100 | Maximum training epochs |
 | `training.batch_size` | 32 | Batch size |
 | `training.encoder_lr` | 3e-5 | Encoder learning rate |
 | `training.head_lr` | 1e-4 | Head learning rate |
@@ -146,8 +182,8 @@ python scripts/train_ppi.py --config configs/ppi_random.yaml --freeze_drug_encod
 | `model.drug_encoder.freeze` | true | Freeze drug encoder |
 | `model.target_encoder.pretrained_path` | facebook/esm2_t33_650M_UR50D | Target encoder |
 | `model.target_encoder.freeze` | true | Freeze target encoder |
-| `training.use_cached_embeddings` | false | Use pre-computed embeddings |
-| `training.max_epochs` | 200 | Maximum training epochs |
+| `training.use_cached_embeddings` | true | Use pre-computed embeddings |
+| `training.max_epochs` | 50–70 | Maximum training epochs (split-dependent) |
 | `training.batch_size` | 32 | Batch size |
 | `training.encoder_lr` | 3e-5 | Encoder learning rate |
 | `training.head_lr` | 1e-4 | Head learning rate |
@@ -162,7 +198,6 @@ These options apply to all training scripts (`configs/default.yaml`):
 | Config Key | Default | Description |
 |------------|---------|-------------|
 | `training.seed` | 42 | Random seed |
-| `training.early_stopping_patience` | 20 | Early stopping patience |
 | `training.gradient_clip_val` | 1.0 | Gradient clipping |
 | `hardware.devices` | auto | GPU devices |
 | `hardware.precision` | 32-true | 32-true, 16-mixed, bf16-mixed |
@@ -183,18 +218,32 @@ The `evidence.lambda_coeff` controls the regularization strength between task lo
 
 ### Permeability Regression (CycPeptMPDB)
 
-| R² | Pearson | RMSE | MAE |
-|:--:|:-------:|:----:|:---:|
-| 0.759 | 0.872 | 0.383 | 0.277 |
+**Single-Assay** (mixed PAMPA/Caco-2 target):
 
-Train/test 9:1, val 10% from train.
+| Split | R² | Pearson | RMSE | MAE |
+|:-----:|:--:|:-------:|:----:|:---:|
+| Random | 0.751 | 0.867 | 0.398 | 0.263 |
+| Scaffold | 0.655 | 0.821 | 0.398 | 0.305 |
+
+**Multi-Assay** (separate PAMPA and Caco-2 heads):
+
+| Split | Assay | R² | Pearson | RMSE | MAE |
+|:-----:|:-----:|:--:|:-------:|:----:|:---:|
+| Random | PAMPA | 0.740 | 0.862 | 0.399 | 0.281 |
+| Random | Caco-2 | 0.694 | 0.833 | 0.412 | 0.274 |
+| Scaffold | PAMPA | 0.629 | 0.815 | 0.406 | 0.317 |
+| Scaffold | Caco-2 | 0.625 | 0.822 | 0.426 | 0.316 |
+
+Train/test 9:1, val 10% from train. Scaffold split by Murcko scaffolds.
+
+<p align="center"><img src="assets/tsne_permeability_splits.png" width="800"></p>
 
 ### PPI Classification (Propedia v2)
 
 | Split | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
 |:-----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 0.971 | 0.914 | 0.853 | 0.816 | 0.912 |
-| aCSM | 0.879 | 0.714 | 0.591 | 0.539 | 0.722 |
+| Random | 0.972 | 0.913 | 0.855 | 0.819 | 0.909 |
+| aCSM | 0.870 | 0.701 | 0.604 | 0.547 | 0.731 |
 
 Train/test 8:2, val 10% from train, 1:4 positive:negative ratio.
 - **Random**: random split

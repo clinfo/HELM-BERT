@@ -213,8 +213,8 @@ jobs/
 cache/
 scripts/data/
 /backups/
-huggingface_upload/model.safetensors
-/huggingface_upload
+/hf_upload/model.safetensors
+/hf_upload
 /UPLOAD.md
 /data/embeddings/
 
