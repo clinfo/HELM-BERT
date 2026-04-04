@@ -272,6 +272,8 @@ class HELMBertMultiAssayLightning(L.LightningModule):
         if not outputs:
             return
 
+        assay_mse_values: Dict[str, float] = {}
+
         for name in ASSAY_NAMES:
             try:
                 all_preds = torch.cat([x[f"{name}_predictions"] for x in outputs])
@@ -296,6 +298,7 @@ class HELMBertMultiAssayLightning(L.LightningModule):
                 self.log(f"val_{name}_mean_epistemic", all_epistemic[valid].mean(), sync_dist=True)
 
             metrics = compute_regression_metrics(preds_valid, targets_valid)
+            assay_mse_values[name] = metrics["mse"]
 
             prog_bar = prefix == "val"
             for metric_name, metric_value in metrics.items():
@@ -304,9 +307,13 @@ class HELMBertMultiAssayLightning(L.LightningModule):
 
             logger.info(f"{prefix}/{name} - RMSE: {metrics['rmse']:.4f}, R²: {metrics['r2']:.4f}")
 
+        if len(assay_mse_values) > 0:
+            macro_mse = sum(assay_mse_values.values()) / len(assay_mse_values)
+            self.log(f"{prefix}_macro_mse", macro_mse, prog_bar=(prefix == "val"), sync_dist=True)
+
         outputs.clear()
 
-    def configure_optimizers(self) -> Dict[str, Any]:
+    def configure_optimizers(self):  # type: ignore[override]
         from src.utils.scheduler import create_wsd_scheduler
 
         param_groups = []
