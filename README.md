@@ -6,7 +6,7 @@ A peptide language model using **HELM (Hierarchical Editing Language for Macromo
 
 ## Model Description
 
-HELM-BERT is built upon the DeBERTa architecture, designed for peptide sequences in HELM notation:
+HELM-BERT is built upon the DeBERTa architecture, pre-trained on ~75k peptides from four databases (ChEMBL, CREMP, CycPeptMPDB, Propedia) using **Masked Language Modeling (MLM)** with a **Warmup-Stable-Decay (WSD)** learning rate schedule.
 
 - **Disentangled Attention**: Decomposes attention into content-content and content-position terms
 - **Enhanced Mask Decoder (EMD)**: Injects absolute position embeddings at the decoder stage
@@ -25,6 +25,9 @@ HELM-BERT is built upon the DeBERTa architecture, designed for peptide sequences
 | Attention heads | 12 |
 | Vocab size | 78 |
 | Max token length | 512 |
+| Pre-training data | ~75k peptides (ChEMBL, CREMP, CycPeptMPDB, Propedia) |
+| Pre-training objective | MLM (span masking, p=0.15) |
+| LR schedule | Warmup-Stable-Decay (WSD) |
 
 ## Installation
 
@@ -36,15 +39,20 @@ uv pip install -r requirements.txt
 ## Quick Start
 
 ```bash
-# Permeability prediction
-python scripts/train_permeability.py
+# Permeability single-assay (choose split)
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml
+python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml
+
+# Permeability multi-assay (choose split)
+python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
+python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml
 
 # PPI classification (choose split)
 python scripts/train_ppi.py --config configs/ppi_random.yaml
 python scripts/train_ppi.py --config configs/ppi_acsm.yaml
 ```
 
-Override settings: `--batch_size 64 --lr 1e-4` or `--config custom.yaml`
+Override settings via CLI: `training.batch_size=64 training.encoder_lr=1e-4`
 
 ## Inference
 
@@ -86,7 +94,7 @@ python scripts/train_mlm.py --from_scratch \
 | `model.from_scratch` | false | Train from scratch |
 | `model.architecture.hidden_size` | 768 | Hidden dimension (from_scratch only) |
 | `model.architecture.num_hidden_layers` | 6 | Number of layers (from_scratch only) |
-| `training.max_epochs` | 500 | Maximum training epochs |
+| `training.max_epochs` | 100 | Maximum training epochs |
 | `training.batch_size` | 64 | Batch size |
 | `training.learning_rate` | 1e-4 | Learning rate |
 | `data.masking.mlm_probability` | 0.15 | Masking probability |
@@ -94,20 +102,29 @@ python scripts/train_mlm.py --from_scratch \
 ### Permeability Prediction
 
 ```bash
-# Fine-tune all layers (default)
-python scripts/train_permeability.py
+# Single-assay (random split)
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml
 
-# Freeze encoder (train head only)
-python scripts/train_permeability.py --freeze_encoder --head_lr 1e-3
+# Single-assay (scaffold split)
+python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml
+
+# Multi-assay (random split)
+python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
+
+# Multi-assay (scaffold split)
+python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml
+
+# Override settings
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml model.freeze_encoder=true training.head_lr=1e-3
 
 # Use local checkpoint
-python scripts/train_permeability.py --pretrained ./checkpoints/my-model
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml model.pretrained_path=./checkpoints/my-model
 
 # Custom data
-python scripts/train_permeability.py --train_file ./data/train.csv --test_file ./data/test.csv
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml data.train_file=./data/train.csv data.test_file=./data/test.csv
 ```
 
-**Key configuration options** (`configs/permeability.yaml`):
+**Key configuration options** (`configs/permeability_single.yaml` / `configs/permeability_multi.yaml`):
 
 | Config Key | Default | Description |
 |------------|---------|-------------|
@@ -115,7 +132,7 @@ python scripts/train_permeability.py --train_file ./data/train.csv --test_file .
 | `model.freeze_encoder` | false | Freeze encoder weights |
 | `model.classifier.num_layers` | 2 | MLP head layers |
 | `model.classifier.dropout` | 0.1 | Classifier dropout |
-| `training.max_epochs` | 200 | Maximum training epochs |
+| `training.max_epochs` | 100 | Maximum training epochs |
 | `training.batch_size` | 32 | Batch size |
 | `training.encoder_lr` | 3e-5 | Encoder learning rate |
 | `training.head_lr` | 1e-4 | Head learning rate |
@@ -146,8 +163,8 @@ python scripts/train_ppi.py --config configs/ppi_random.yaml --freeze_drug_encod
 | `model.drug_encoder.freeze` | true | Freeze drug encoder |
 | `model.target_encoder.pretrained_path` | facebook/esm2_t33_650M_UR50D | Target encoder |
 | `model.target_encoder.freeze` | true | Freeze target encoder |
-| `training.use_cached_embeddings` | false | Use pre-computed embeddings |
-| `training.max_epochs` | 200 | Maximum training epochs |
+| `training.use_cached_embeddings` | true | Use pre-computed embeddings |
+| `training.max_epochs` | 50–70 | Maximum training epochs (split-dependent) |
 | `training.batch_size` | 32 | Batch size |
 | `training.encoder_lr` | 3e-5 | Encoder learning rate |
 | `training.head_lr` | 1e-4 | Head learning rate |
@@ -162,7 +179,6 @@ These options apply to all training scripts (`configs/default.yaml`):
 | Config Key | Default | Description |
 |------------|---------|-------------|
 | `training.seed` | 42 | Random seed |
-| `training.early_stopping_patience` | 20 | Early stopping patience |
 | `training.gradient_clip_val` | 1.0 | Gradient clipping |
 | `hardware.devices` | auto | GPU devices |
 | `hardware.precision` | 32-true | 32-true, 16-mixed, bf16-mixed |
@@ -183,24 +199,46 @@ The `evidence.lambda_coeff` controls the regularization strength between task lo
 
 ### Permeability Regression (CycPeptMPDB)
 
-| R² | Pearson | RMSE | MAE |
-|:--:|:-------:|:----:|:---:|
-| 0.759 | 0.872 | 0.383 | 0.277 |
+**Single-Assay** (mixed PAMPA/Caco-2 target):
 
-Train/test 9:1, val 10% from train.
+| Split | R² | Pearson | RMSE | MAE |
+|:-----:|:--:|:-------:|:----:|:---:|
+| Random | 0.769 | 0.878 | 0.388 | 0.269 |
+| Scaffold | 0.643 | 0.812 | 0.380 | 0.284 |
+
+**Multi-Assay** (separate PAMPA and Caco-2 heads):
+
+| Split | Assay | R² | Pearson | RMSE | MAE |
+|:-----:|:-----:|:--:|:-------:|:----:|:---:|
+| Random | PAMPA | 0.711 | 0.844 | 0.426 | 0.298 |
+| Random | Caco-2 | 0.772 | 0.878 | 0.402 | 0.305 |
+| Scaffold | PAMPA | 0.584 | 0.788 | 0.393 | 0.299 |
+| Scaffold | Caco-2 | 0.701 | 0.846 | 0.381 | 0.287 |
+
+Train/test 9:1, val 10% from train. Scaffold split by Murcko scaffolds.
+
+<p align="center"><img src="assets/tsne_permeability_splits.png" width="800"></p>
 
 ### PPI Classification (Propedia v2)
 
 | Split | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
 |:-----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 0.971 | 0.914 | 0.853 | 0.816 | 0.912 |
-| aCSM | 0.879 | 0.714 | 0.591 | 0.539 | 0.722 |
+| Random | 0.972 | 0.912 | 0.859 | 0.824 | 0.911 |
+| aCSM | 0.868 | 0.702 | 0.613 | 0.559 | 0.735 |
 
 Train/test 8:2, val 10% from train, 1:4 positive:negative ratio.
 - **Random**: random split
 - **aCSM**: clustering-based split on aCSM-ALL complex signatures with protein overlap pruning
 
 <p align="center"><img src="assets/tsne_ppi_splits.png" width="800"></p>
+
+## Paper Checkpoint
+
+The original model from [arXiv:2512.23175](https://arxiv.org/abs/2512.23175) (pre-trained on 3 databases, without CREMP/WSD) is available via:
+
+```python
+model = AutoModel.from_pretrained("Flansma/helm-bert", revision="paper", trust_remote_code=True)
+```
 
 ## Citation
 

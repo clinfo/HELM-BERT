@@ -54,7 +54,11 @@ def main():
     config = load_config(task="mlm")
 
     # Setup environment
-    setup_training_env(config.training.seed, config.trainer.float32_matmul_precision)
+    setup_training_env(
+        config.training.seed,
+        config.trainer.float32_matmul_precision,
+        config.trainer.deterministic,
+    )
 
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

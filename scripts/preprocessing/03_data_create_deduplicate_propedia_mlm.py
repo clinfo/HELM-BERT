@@ -15,21 +15,23 @@ from rdkit import Chem
 INPUT_FILES = {
     'cycpeptmpdb': ['local_data/raw/CycPeptMPDB_Peptide_All_V1.2.csv'],
     'propedia': ['local_data/intermediate_product/Propedia_v2_with_HELM_SMILES.csv'],
-    'chembl': ['local_data/raw/chembl_v35_with_helm_notation.csv']
+    'cremp': ['local_data/intermediate_product/CREMP_v1.1_helm.csv'],
+    'chembl': ['local_data/raw/chembl_v35_with_helm_notation.csv'],
 }
 
 # SMILES column names for each dataset
 SMILES_COLUMNS = {
     'cycpeptmpdb': 'SMILES',
     'propedia': 'Peptide_SMILES',
-    'chembl': 'canonical_smiles'
+    'cremp': 'smiles',
+    'chembl': 'canonical_smiles',
 }
 
 # Output directory
 OUTPUT_DIR = 'data/mlm'
 
 # Priority order (leftmost preserved in cross-dataset deduplication)
-PRIORITY_ORDER = ['cycpeptmpdb', 'propedia', 'chembl']
+PRIORITY_ORDER = ['cycpeptmpdb', 'propedia', 'cremp', 'chembl']
 
 # =============================================================================
 

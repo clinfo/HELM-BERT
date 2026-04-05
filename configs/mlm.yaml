@@ -57,6 +57,9 @@ data:
     - name: propedia
       file: propedia_deduplicated.csv
       helm_column: Peptide_HELM
+    - name: cremp
+      file: cremp_deduplicated.csv
+      helm_column: helm
 
   # Span Masking Configuration (SpanBERT-style)
   masking:
