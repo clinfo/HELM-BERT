@@ -18,7 +18,7 @@ from .datasets import HELMDataset, MLMDataset, MultiAssayHELMDataset
 from .dual_sequence_dataset import DualSequenceDataset
 from .embedding_only_dataset import EmbeddingOnlyDataset
 from .mlm_datamodule import DatasetInfo, MLMDataConfig, MLMDataModule
-from .multi_assay_datamodule import MultiAssayDataConfig, MultiAssayDataModule
+from .permeability_multi_datamodule import MultiAssayDataConfig, MultiAssayDataModule
 from .permeability_datamodule import PermeabilityDataConfig, PermeabilityDataModule
 from .ppi_datamodule import PPIDataConfig, PPIDataModule
 from .span_masking import SpanMasking, SpanMaskingConfig

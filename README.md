@@ -15,39 +15,6 @@ HELM-BERT is built upon the DeBERTa architecture, pre-trained on ~75k peptides f
 
 <p align="center"><img src="assets/HELM-BERT.png" width="600"></p>
 
-### Pipeline Overview
-
-```mermaid
-graph LR
-    A[Pre-training] --> B[HELM-BERT] --> C[Permeability]
-    B --> D[Multi-Assay]
-    B --> E[PPI]
-```
-
-### Downstream Architectures
-
-```mermaid
-graph TD
-    subgraph "Permeability (Single-Assay)"
-        A[HELM] --> B[HELM-BERT] --> C["NIG Head"]
-        C --> D["pred ± uncertainty"]
-    end
-
-    subgraph "Permeability (Multi-Assay)"
-        E[HELM] --> F["HELM-BERT<br/>(shared)"]
-        F --> G[PAMPA Head]
-        F --> H[Caco-2 Head]
-    end
-
-    subgraph "PPI Classification"
-        I[HELM] --> J[HELM-BERT]
-        K[Protein] --> L[ESM-2]
-        J --> M[Concat]
-        L --> M
-        M --> N[Dirichlet Head]
-    end
-```
-
 ## Model Specifications
 
 | Parameter | Value |
@@ -73,7 +40,7 @@ uv pip install -r requirements.txt
 
 ```bash
 # Permeability prediction
-python scripts/train_permeability.py
+python scripts/train_permeability_single.py
 
 # PPI classification (choose split)
 python scripts/train_ppi.py --config configs/ppi_random.yaml
@@ -131,19 +98,19 @@ python scripts/train_mlm.py --from_scratch \
 
 ```bash
 # Fine-tune all layers (default)
-python scripts/train_permeability.py
+python scripts/train_permeability_single.py
 
 # Freeze encoder (train head only)
-python scripts/train_permeability.py --freeze_encoder --head_lr 1e-3
+python scripts/train_permeability_single.py --freeze_encoder --head_lr 1e-3
 
 # Use local checkpoint
-python scripts/train_permeability.py --pretrained ./checkpoints/my-model
+python scripts/train_permeability_single.py --pretrained ./checkpoints/my-model
 
 # Custom data
-python scripts/train_permeability.py --train_file ./data/train.csv --test_file ./data/test.csv
+python scripts/train_permeability_single.py --train_file ./data/train.csv --test_file ./data/test.csv
 ```
 
-**Key configuration options** (`configs/permeability.yaml`):
+**Key configuration options** (`configs/permeability_single.yaml`):
 
 | Config Key | Default | Description |
 |------------|---------|-------------|
@@ -222,17 +189,17 @@ The `evidence.lambda_coeff` controls the regularization strength between task lo
 
 | Split | R² | Pearson | RMSE | MAE |
 |:-----:|:--:|:-------:|:----:|:---:|
-| Random | 0.751 | 0.867 | 0.398 | 0.263 |
-| Scaffold | 0.655 | 0.821 | 0.398 | 0.305 |
+| Random | 0.769 | 0.878 | 0.388 | 0.269 |
+| Scaffold | 0.643 | 0.812 | 0.380 | 0.284 |
 
 **Multi-Assay** (separate PAMPA and Caco-2 heads):
 
 | Split | Assay | R² | Pearson | RMSE | MAE |
 |:-----:|:-----:|:--:|:-------:|:----:|:---:|
-| Random | PAMPA | 0.740 | 0.862 | 0.399 | 0.281 |
-| Random | Caco-2 | 0.694 | 0.833 | 0.412 | 0.274 |
-| Scaffold | PAMPA | 0.629 | 0.815 | 0.406 | 0.317 |
-| Scaffold | Caco-2 | 0.625 | 0.822 | 0.426 | 0.316 |
+| Random | PAMPA | 0.711 | 0.844 | 0.426 | 0.298 |
+| Random | Caco-2 | 0.772 | 0.878 | 0.402 | 0.305 |
+| Scaffold | PAMPA | 0.584 | 0.788 | 0.393 | 0.299 |
+| Scaffold | Caco-2 | 0.701 | 0.846 | 0.381 | 0.287 |
 
 Train/test 9:1, val 10% from train. Scaffold split by Murcko scaffolds.
 
@@ -242,14 +209,22 @@ Train/test 9:1, val 10% from train. Scaffold split by Murcko scaffolds.
 
 | Split | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
 |:-----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 0.972 | 0.913 | 0.855 | 0.819 | 0.909 |
-| aCSM | 0.870 | 0.701 | 0.604 | 0.547 | 0.731 |
+| Random | 0.972 | 0.912 | 0.859 | 0.824 | 0.911 |
+| aCSM | 0.868 | 0.702 | 0.613 | 0.559 | 0.735 |
 
 Train/test 8:2, val 10% from train, 1:4 positive:negative ratio.
 - **Random**: random split
 - **aCSM**: clustering-based split on aCSM-ALL complex signatures with protein overlap pruning
 
 <p align="center"><img src="assets/tsne_ppi_splits.png" width="800"></p>
+
+## Paper Checkpoint
+
+The original model from [arXiv:2512.23175](https://arxiv.org/abs/2512.23175) (pre-trained on 3 databases, without CREMP/WSD) is available via:
+
+```python
+model = AutoModel.from_pretrained("Flansma/helm-bert", revision="paper", trust_remote_code=True)
+```
 
 ## Citation
 

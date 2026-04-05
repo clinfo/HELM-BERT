@@ -2,8 +2,8 @@
 """Multi-assay permeability regression training script (PAMPA + Caco2).
 
 Usage:
-    python scripts/train_permeability_multi_assay.py
-    python scripts/train_permeability_multi_assay.py model.freeze_encoder=true
+    python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
+    python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ from scripts.training_utils import (
     to_dict,
     build_tags,
 )
-from src.datamodules.multi_assay_datamodule import MultiAssayDataConfig, MultiAssayDataModule
-from src.models.multi_assay_lightning import (
+from src.datamodules.permeability_multi_datamodule import MultiAssayDataConfig, MultiAssayDataModule
+from src.models.permeability_multi_lightning import (
     ASSAY_NAMES,
     HELMBertMultiAssayLightning,
     MultiAssayTrainingConfig,
@@ -54,7 +54,12 @@ from src.models.multi_assay_lightning import (
 def main():
     start_time = time.time()
 
-    config = load_config(task="permeability_multi_assay")
+    if "--config" not in sys.argv:
+        print("Error: --config is required for multi-assay training.")
+        print("  python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml")
+        print("  python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml")
+        sys.exit(1)
+    config = load_config(task="permeability_multi")
 
     setup_training_env(
         config.training.seed,
@@ -63,7 +68,7 @@ def main():
     )
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"multi_assay_{config.data.split_name}_{get_model_tag(config)}_{timestamp}"
+    run_name = f"permeability_multi_{config.data.split_name}_{get_model_tag(config)}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     logger = setup_logging(output_dir, timestamp, "train_multi_assay")

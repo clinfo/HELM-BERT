@@ -1,28 +1,29 @@
 # =============================================================================
-# HELM-BERT Permeability Regression Configuration
+# HELM-BERT Multi-Assay Permeability Regression Configuration
 # =============================================================================
+# Two-head NIG evidential regression: PAMPA + Caco2.
 # Inherits common settings from default.yaml.
-# Contains ALL permeability-specific settings.
+# Do not use directly — use permeability_multi_random.yaml or permeability_multi_scaffold.yaml instead.
 #
 # Usage:
-#   python scripts/train_permeability.py
-#   python scripts/train_permeability.py model.freeze_encoder=true
+#   python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
+#   python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml
 
 # =============================================================================
 # Paths
 # =============================================================================
 paths:
-  output_dir: ./outputs/permeability
-  results_dir: ./results/permeability
+  output_dir: ./outputs/permeability_multi
+  results_dir: ./results/permeability_multi
 
 # =============================================================================
 # Model
 # =============================================================================
 model:
   freeze_encoder: false
-  encoder_attribute_name: helmbert  # Attribute name to access encoder in the model
+  encoder_attribute_name: helmbert
 
-  # Classifier head
+  # Classifier head (shared across both assay outputs)
   classifier:
     num_layers: 2
     dropout: 0.1
@@ -44,7 +45,9 @@ data:
   train_file: ./data/downstream/cycpeptmpdb_permeability_random_train.csv
   test_file: ./data/downstream/cycpeptmpdb_permeability_random_test.csv
   helm_column: HELM
-  target_column: Permeability
+  assay_columns:
+    - PAMPA
+    - Caco2
   val_ratio: 0.1
   max_seq_length: 512
 
@@ -53,14 +56,6 @@ data:
 # =============================================================================
 hardware:
   devices: [0]
-
-# =============================================================================
-# Batch Key Names
-# =============================================================================
-batch_keys:
-  input_ids: input_ids
-  attention_mask: attention_mask
-  target: target
 
 # =============================================================================
 # Evidential Deep Learning (Normal-Inverse-Gamma regression)
@@ -72,9 +67,8 @@ evidence:
 # Checkpoint
 # =============================================================================
 checkpoint:
-  monitor: val_mse
+  monitor: val_macro_mse
   mode: min
-  filename_pattern: "{epoch}-{val_mse:.4f}"
+  filename_pattern: "{epoch}-{val_macro_mse:.4f}"
   save_top_k: 10
   save_last: true
-
