@@ -1,0 +1,13 @@
+# =============================================================================
+# Permeability - Caco-2 only, Scaffold Split
+# =============================================================================
+# Usage: python scripts/train_permeability.py --config configs/permeability_caco2_scaffold.yaml
+
+training:
+  max_epochs: 100
+
+data:
+  split_name: cycpeptmpdb_permeability_caco2_scaffold
+  train_file: ./data/downstream/cycpeptmpdb_permeability_caco2_scaffold_train.csv
+  test_file: ./data/downstream/cycpeptmpdb_permeability_caco2_scaffold_test.csv
+  target_column: Caco2

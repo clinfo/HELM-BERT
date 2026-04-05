@@ -20,8 +20,8 @@ class MLMBatch(TypedDict):
     labels: torch.Tensor  # (batch, seq_len) - original tokens, -100 for non-masked
 
 
-class PermeabilitySingleBatch(TypedDict):
-    """Batch for permeability single-assay regression.
+class PermeabilityBatch(TypedDict):
+    """Batch for permeability regression.
 
     Produced by DataCollatorForRegression.
     """
@@ -30,19 +30,6 @@ class PermeabilitySingleBatch(TypedDict):
     attention_mask: torch.Tensor  # (batch, seq_len)
     target: torch.Tensor  # (batch,)
 
-
-class PermeabilityMultiBatch(TypedDict):
-    """Batch for permeability multi-assay regression (PAMPA + Caco2).
-
-    Produced by DataCollatorForPermeabilityMultiRegression.
-    """
-
-    input_ids: torch.Tensor  # (batch, seq_len)
-    attention_mask: torch.Tensor  # (batch, seq_len)
-    target_pampa: torch.Tensor  # (batch,)
-    target_caco2: torch.Tensor  # (batch,)
-    mask_pampa: torch.Tensor  # (batch,) — 1.0 if valid, 0.0 if missing
-    mask_caco2: torch.Tensor  # (batch,) — 1.0 if valid, 0.0 if missing
 
 
 class PPIBatchTokenized(TypedDict):

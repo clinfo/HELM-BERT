@@ -1,0 +1,12 @@
+# =============================================================================
+# Permeability - Scaffold Split (mixed target)
+# =============================================================================
+# Usage: python scripts/train_permeability.py --config configs/permeability_scaffold.yaml
+
+training:
+  max_epochs: 100
+
+data:
+  split_name: cycpeptmpdb_permeability_scaffold
+  train_file: ./data/downstream/cycpeptmpdb_permeability_scaffold_train.csv
+  test_file: ./data/downstream/cycpeptmpdb_permeability_scaffold_test.csv
