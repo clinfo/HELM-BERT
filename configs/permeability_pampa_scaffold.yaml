@@ -1,0 +1,13 @@
+# =============================================================================
+# Permeability - PAMPA only, Scaffold Split
+# =============================================================================
+# Usage: python scripts/train_permeability.py --config configs/permeability_pampa_scaffold.yaml
+
+training:
+  max_epochs: 100
+
+data:
+  split_name: cycpeptmpdb_permeability_pampa_scaffold
+  train_file: ./data/downstream/cycpeptmpdb_permeability_pampa_scaffold_train.csv
+  test_file: ./data/downstream/cycpeptmpdb_permeability_pampa_scaffold_test.csv
+  target_column: PAMPA

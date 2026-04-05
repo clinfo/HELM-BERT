@@ -35,20 +35,6 @@ def build_scaffold_groups(smiles_iter: Iterable[str]) -> List[List[int]]:
     )
 
 
-def distribute_groups_zigzag(groups: List[List[int]], n_folds: int) -> List[List[List[int]]]:
-    """Distribute sorted scaffold groups into folds with zigzag balancing.
-
-    This follows the same largest-first zigzag pattern used in the
-    reference scaffold split code.
-    """
-    folds: List[List[List[int]]] = [[] for _ in range(n_folds)]
-    for i, group in enumerate(groups):
-        r = i % (2 * n_folds)
-        fold_idx = min(r, (2 * n_folds) - r - 1)
-        folds[fold_idx].append(group)
-    return folds
-
-
 def flatten_groups(groups: List[List[int]]) -> List[int]:
     """Flatten scaffold groups into a list of row indices."""
     return [idx for group in groups for idx in group]
@@ -68,8 +54,8 @@ def greedy_scaffold_partition(
     """Greedily assign scaffold groups into test/train.
 
     Groups are assumed to be sorted largest-first. The same direct assignment
-    procedure is shared across permeability single and multi splits; only the
-    state representation and comparison key differ.
+    procedure is shared across permeability splits; only the state
+    representation and comparison key differ.
     """
     test_groups: List[List[int]] = []
     train_groups: List[List[int]] = []

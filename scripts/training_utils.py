@@ -66,17 +66,6 @@ class DisplayConfig:
     model_summary_max_depth: int
 
 
-@dataclass
-class TrainerConfig:
-    """Configuration for PyTorch Lightning Trainer.
-
-    All fields are required - values come from YAML configuration.
-    """
-
-    log_every_n_steps: int
-    deterministic: bool
-    float32_matmul_precision: str
-
 
 # =============================================================================
 # Config Loading (OmegaConf + argparse)
@@ -134,19 +123,18 @@ def load_config(task: str, argv: List[str] = None) -> DictConfig:
         config = OmegaConf.merge(config, OmegaConf.from_dotlist(dotlist_overrides))
 
     # Parse argparse-style overrides (--key value)
-    argparse_overrides = parse_argparse_overrides(remaining_args, task)
+    argparse_overrides = parse_argparse_overrides(remaining_args)
     if argparse_overrides:
         config = OmegaConf.merge(config, OmegaConf.from_dotlist(argparse_overrides))
 
     return config
 
 
-def parse_argparse_overrides(argv: List[str], task: str) -> List[str]:
+def parse_argparse_overrides(argv: List[str]) -> List[str]:
     """Parse argparse-style arguments and convert to dotlist.
 
     Args:
         argv: Command line arguments
-        task: Task name for task-specific mappings
 
     Returns:
         List of dotlist strings
@@ -399,39 +387,6 @@ def log_header(logger: logging.Logger, title: str) -> None:
     logger.info(title)
     logger.info(SEPARATOR_LINE)
 
-
-def log_config(logger: logging.Logger, config_path: Path) -> None:
-    """Log configuration saved message.
-
-    Args:
-        logger: Logger instance
-        config_path: Path where config was saved
-    """
-    logger.info(f"Configuration saved to {config_path}")
-
-
-def log_training_config(
-    logger: logging.Logger,
-    max_epochs: int,
-    batch_size: int,
-    **kwargs,
-) -> None:
-    """Log training configuration details.
-
-    Args:
-        logger: Logger instance
-        max_epochs: Maximum training epochs
-        batch_size: Batch size
-        **kwargs: Additional config items to log (key-value pairs)
-    """
-    logger.info("\nTraining Configuration:")
-    logger.info(f"  Max epochs: {max_epochs}")
-    logger.info(f"  Batch size: {batch_size}")
-    for key, value in kwargs.items():
-        # Convert snake_case to readable format
-        label = key.replace("_", " ").title()
-        logger.info(f"  {label}: {value}")
-    logger.info(SEPARATOR_LINE)
 
 
 def log_training_start(logger: logging.Logger, task_name: str = "training") -> None:
