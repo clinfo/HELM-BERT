@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import argparse
 import logging
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import pandas as pd
 import lightning as L

@@ -9,7 +9,6 @@ Output: Propedia_v2_unique_ppi_HELM_SMILES.csv (used by 06_ppi_*)
 """
 
 import pandas as pd
-import numpy as np
 from pathlib import Path
 import logging
 from datetime import datetime

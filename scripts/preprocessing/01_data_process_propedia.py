@@ -9,14 +9,11 @@ This script:
 4. Creates a consolidated CSV file with all positive samples
 """
 
-import os
 import pandas as pd
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 import sys
-from glob import glob
-import re
 from dataclasses import dataclass
 from collections import defaultdict
 

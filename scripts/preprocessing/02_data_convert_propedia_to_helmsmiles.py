@@ -5,7 +5,6 @@ import pandas as pd
 import logging
 from pathlib import Path
 from rdkit import Chem
-from rdkit.Chem import rdMolDescriptors
 import re
 import sys
 

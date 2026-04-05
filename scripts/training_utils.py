@@ -123,19 +123,18 @@ def load_config(task: str, argv: List[str] = None) -> DictConfig:
         config = OmegaConf.merge(config, OmegaConf.from_dotlist(dotlist_overrides))
 
     # Parse argparse-style overrides (--key value)
-    argparse_overrides = parse_argparse_overrides(remaining_args, task)
+    argparse_overrides = parse_argparse_overrides(remaining_args)
     if argparse_overrides:
         config = OmegaConf.merge(config, OmegaConf.from_dotlist(argparse_overrides))
 
     return config
 
 
-def parse_argparse_overrides(argv: List[str], task: str) -> List[str]:
+def parse_argparse_overrides(argv: List[str]) -> List[str]:
     """Parse argparse-style arguments and convert to dotlist.
 
     Args:
         argv: Command line arguments
-        task: Task name for task-specific mappings
 
     Returns:
         List of dotlist strings

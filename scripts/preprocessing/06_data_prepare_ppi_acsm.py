@@ -26,7 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import argparse
 import logging
-from collections import defaultdict
 from datetime import datetime
 from typing import Set, Tuple, List, Dict
 

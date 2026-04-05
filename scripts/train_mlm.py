@@ -30,7 +30,6 @@ from scripts.training_utils import (
     config_to_display_config,
     create_callbacks,
     create_output_dirs,
-    load_best_checkpoint,
     load_config,
     log_completion,
     log_header,
