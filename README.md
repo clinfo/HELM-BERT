@@ -39,15 +39,20 @@ uv pip install -r requirements.txt
 ## Quick Start
 
 ```bash
-# Permeability prediction
-python scripts/train_permeability_single.py
+# Permeability single-assay (choose split)
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml
+python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml
+
+# Permeability multi-assay (choose split)
+python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
+python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml
 
 # PPI classification (choose split)
 python scripts/train_ppi.py --config configs/ppi_random.yaml
 python scripts/train_ppi.py --config configs/ppi_acsm.yaml
 ```
 
-Override settings: `--batch_size 64 --lr 1e-4` or `--config custom.yaml`
+Override settings via CLI: `training.batch_size=64 training.encoder_lr=1e-4`
 
 ## Inference
 
@@ -97,20 +102,29 @@ python scripts/train_mlm.py --from_scratch \
 ### Permeability Prediction
 
 ```bash
-# Fine-tune all layers (default)
-python scripts/train_permeability_single.py
+# Single-assay (random split)
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml
 
-# Freeze encoder (train head only)
-python scripts/train_permeability_single.py --freeze_encoder --head_lr 1e-3
+# Single-assay (scaffold split)
+python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml
+
+# Multi-assay (random split)
+python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
+
+# Multi-assay (scaffold split)
+python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml
+
+# Override settings
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml model.freeze_encoder=true training.head_lr=1e-3
 
 # Use local checkpoint
-python scripts/train_permeability_single.py --pretrained ./checkpoints/my-model
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml model.pretrained_path=./checkpoints/my-model
 
 # Custom data
-python scripts/train_permeability_single.py --train_file ./data/train.csv --test_file ./data/test.csv
+python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml data.train_file=./data/train.csv data.test_file=./data/test.csv
 ```
 
-**Key configuration options** (`configs/permeability_single.yaml`):
+**Key configuration options** (`configs/permeability_single.yaml` / `configs/permeability_multi.yaml`):
 
 | Config Key | Default | Description |
 |------------|---------|-------------|
