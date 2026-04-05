@@ -189,27 +189,27 @@ The `evidence.lambda_coeff` controls the regularization strength between task lo
 
 ### Permeability Regression (CycPeptMPDB)
 
-| Split | Target | R² | Pearson | RMSE | MAE |
-|:-----:|:------:|:--:|:-------:|:----:|:---:|
-| Random | Mixed | 0.769 | 0.878 | 0.388 | 0.269 |
-| Random | PAMPA | 0.765 | 0.875 | 0.384 | 0.275 |
-| Random | Caco-2 | 0.758 | 0.876 | 0.414 | 0.303 |
-| Scaffold | Mixed | 0.643 | 0.812 | 0.380 | 0.284 |
-| Scaffold | PAMPA | 0.627 | 0.810 | 0.372 | 0.281 |
-| Scaffold | Caco-2 | 0.698 | 0.849 | 0.383 | 0.287 |
+| Split | Target | Train | Test | R² | Pearson | RMSE | MAE |
+|:-----:|:------:|:-----:|:----:|:--:|:-------:|:----:|:---:|
+| Random | Mixed | 6,944 | 772 | 0.769 | 0.878 | 0.388 | 0.269 |
+| Random | PAMPA | 6,103 | 679 | 0.765 | 0.875 | 0.384 | 0.275 |
+| Random | Caco-2 | 971 | 108 | 0.758 | 0.876 | 0.414 | 0.303 |
+| Scaffold | Mixed | 6,944 | 772 | 0.643 | 0.812 | 0.380 | 0.284 |
+| Scaffold | PAMPA | 6,104 | 678 | 0.627 | 0.810 | 0.372 | 0.281 |
+| Scaffold | Caco-2 | 958 | 121 | 0.698 | 0.849 | 0.383 | 0.287 |
 
-Train/test 9:1, val 10% from train. Scaffold split by Murcko scaffolds.
+Val 10% from train. Scaffold split by Murcko scaffolds.
 
 <p align="center"><img src="assets/tsne_permeability_splits.png" width="800"></p>
 
 ### PPI Classification (Propedia v2)
 
-| Split | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
-|:-----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 0.972 | 0.912 | 0.859 | 0.824 | 0.911 |
-| aCSM | 0.868 | 0.702 | 0.613 | 0.559 | 0.735 |
+| Split | Train | Test | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
+|:-----:|:-----:|:----:|:-------:|:------:|:--:|:---:|:------------:|
+| Random | 80,225 | 20,060 | 0.972 | 0.912 | 0.859 | 0.824 | 0.911 |
+| aCSM | 80,415 | 18,805 | 0.868 | 0.702 | 0.613 | 0.559 | 0.735 |
 
-Train/test 8:2, val 10% from train, 1:4 positive:negative ratio.
+Val 10% from train, 1:4 positive:negative ratio.
 - **Random**: random split
 - **aCSM**: clustering-based split on aCSM-ALL complex signatures with protein overlap pruning
 
