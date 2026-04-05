@@ -193,7 +193,7 @@ All downstream tasks use Evidential Deep Learning ([Soleimany et al. 2021](https
 | Permeability | Normal-Inverse-Gamma | Aleatoric (data noise) + Epistemic (model uncertainty) |
 | PPI | Dirichlet | Total uncertainty (K/S) |
 
-The `evidence.lambda_coeff` controls the regularization strength between task loss and evidence penalty. Values were selected via a 12-point lambda sweep (0.01–2.0) optimizing both prediction performance and uncertainty calibration quality.
+The `evidence.lambda_coeff` controls the regularization strength between task loss and evidence penalty.
 
 ## Performance
 
