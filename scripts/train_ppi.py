@@ -33,6 +33,7 @@ from scripts.training_utils import (
     config_to_display_config,
     create_callbacks,
     create_output_dirs,
+    get_model_tag,
     load_best_checkpoint,
     load_config,
     log_completion,
@@ -62,11 +63,15 @@ def main():
     config = load_config(task="ppi")
 
     # Setup environment
-    setup_training_env(config.training.seed, config.trainer.float32_matmul_precision)
+    setup_training_env(
+        config.training.seed,
+        config.trainer.float32_matmul_precision,
+        config.trainer.deterministic,
+    )
 
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"ppi_{config.data.split_name}_{timestamp}"
+    run_name = f"ppi_{config.data.split_name}_{get_model_tag(config)}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     # Setup logging

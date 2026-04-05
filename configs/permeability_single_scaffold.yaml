@@ -1,0 +1,12 @@
+# =============================================================================
+# Permeability Single-Assay - Scaffold Split
+# =============================================================================
+# Usage: python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml
+
+training:
+  max_epochs: 100
+
+data:
+  split_name: cycpeptmpdb_permeability_scaffold
+  train_file: ./data/downstream/cycpeptmpdb_permeability_scaffold_train.csv
+  test_file: ./data/downstream/cycpeptmpdb_permeability_scaffold_test.csv

@@ -1,0 +1,12 @@
+# =============================================================================
+# Permeability Multi-Assay - Random Split
+# =============================================================================
+# Usage: python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
+
+training:
+  max_epochs: 100
+
+data:
+  split_name: cycpeptmpdb_permeability_random
+  train_file: ./data/downstream/cycpeptmpdb_permeability_random_train.csv
+  test_file: ./data/downstream/cycpeptmpdb_permeability_random_test.csv
