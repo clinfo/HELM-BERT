@@ -150,18 +150,3 @@ def compute_classification_metrics(
     return metrics
 
 
-def mean_pool(hidden: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    """Apply mean pooling with numerical stability.
-
-    Args:
-        hidden: Hidden states [batch_size, seq_len, hidden_dim]
-        mask: Attention mask [batch_size, seq_len]
-
-    Returns:
-        Pooled output [batch_size, hidden_dim]
-    """
-    mask_expanded = mask.unsqueeze(-1).expand(hidden.size()).float()
-    sum_embeddings = torch.sum(hidden * mask_expanded, dim=1)
-    eps = torch.finfo(hidden.dtype).eps
-    sum_mask = torch.clamp(mask_expanded.sum(dim=1), min=eps)
-    return sum_embeddings / sum_mask

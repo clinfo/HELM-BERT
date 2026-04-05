@@ -5,7 +5,6 @@ Used by DataModule.prepare_data() to auto-populate the embedding cache.
 """
 
 import logging
-from pathlib import Path
 from typing import List
 
 import torch

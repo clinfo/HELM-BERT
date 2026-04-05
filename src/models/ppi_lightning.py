@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Optional
 import lightning as L
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModel
 
