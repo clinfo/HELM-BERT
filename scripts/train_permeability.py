@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""Permeability single-assay regression training script.
+"""Permeability regression training script.
 
 Usage:
-    python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml
-    python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml
+    python scripts/train_permeability.py --config configs/permeability_random.yaml
+    python scripts/train_permeability.py --config configs/permeability_scaffold.yaml
 """
 
 from __future__ import annotations
@@ -43,10 +43,10 @@ from scripts.training_utils import (
     to_dict,
     build_tags,
 )
-from src.datamodules import PermeabilitySingleDataModule, PermeabilitySingleDataConfig
-from src.models.permeability_single_lightning import (
-    HELMBertPermeabilitySingleLightning,
-    PermeabilitySingleTrainingConfig,
+from src.datamodules import PermeabilityDataModule, PermeabilityDataConfig
+from src.models.permeability_lightning import (
+    HELMBertPermeabilityLightning,
+    PermeabilityTrainingConfig,
 )
 
 
@@ -55,11 +55,11 @@ def main():
     start_time = time.time()
 
     if "--config" not in sys.argv:
-        print("Error: --config is required for permeability single training.")
-        print("  python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml")
-        print("  python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml")
+        print("Error: --config is required.")
+        print("  python scripts/train_permeability.py --config configs/permeability_random.yaml")
+        print("  python scripts/train_permeability.py --config configs/permeability_scaffold.yaml")
         sys.exit(1)
-    config = load_config(task="permeability_single")
+    config = load_config(task="permeability")
 
     setup_training_env(
         config.training.seed,
@@ -68,13 +68,13 @@ def main():
     )
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"permeability_single_{config.data.split_name}_{get_model_tag(config)}_{timestamp}"
+    run_name = f"permeability_{config.data.split_name}_{get_model_tag(config)}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
-    logger = setup_logging(output_dir, timestamp, "train_permeability_single")
-    log_header(logger, "Permeability Single Evidential Regression Training")
+    logger = setup_logging(output_dir, timestamp, "train_permeability")
+    log_header(logger, "Permeability Evidential Regression Training")
 
-    data_config = PermeabilitySingleDataConfig(
+    data_config = PermeabilityDataConfig(
         train_file=config.data.train_file,
         test_file=config.data.test_file,
         helm_column=config.data.helm_column,
@@ -105,14 +105,14 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(
         config.model.pretrained_path, trust_remote_code=config.model.trust_remote_code
     )
-    datamodule = PermeabilitySingleDataModule(config=data_config, tokenizer=tokenizer)
+    datamodule = PermeabilityDataModule(config=data_config, tokenizer=tokenizer)
 
     datamodule.setup("fit")
     steps_per_epoch = len(datamodule.train_dataloader())
     total_steps = steps_per_epoch * config.training.max_epochs
     logger.info(f"WSD scheduler: {total_steps} total steps ({steps_per_epoch} steps/epoch × {config.training.max_epochs} epochs)")
 
-    training_config = PermeabilitySingleTrainingConfig(
+    training_config = PermeabilityTrainingConfig(
         encoder_lr=config.training.encoder_lr,
         head_lr=config.training.head_lr,
         weight_decay=config.training.weight_decay,
@@ -127,7 +127,7 @@ def main():
         decay_ratio=config.training.decay_ratio,
     )
 
-    model = HELMBertPermeabilitySingleLightning(
+    model = HELMBertPermeabilityLightning(
         model_name_or_path=config.model.pretrained_path,
         training_config=training_config,
         trust_remote_code=config.model.trust_remote_code,
@@ -146,7 +146,7 @@ def main():
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
-        tags=build_tags(config, ["permeability", "permeability-single", "downstream", "regression", "evidential", config.data.split_name]),
+        tags=build_tags(config, ["permeability", "downstream", "regression", "evidential", config.data.split_name]),
     )
 
     trainer = L.Trainer(
@@ -161,13 +161,13 @@ def main():
         log_every_n_steps=config.trainer.log_every_n_steps,
     )
 
-    log_training_start(logger, "permeability single training")
+    log_training_start(logger, "permeability training")
     trainer.fit(model, datamodule)
 
     training_duration = time.time() - start_time
 
     logger.info(f"Loading best model from: {trainer.checkpoint_callback.best_model_path}")
-    model = load_best_checkpoint(trainer, HELMBertPermeabilitySingleLightning, strict=False)
+    model = load_best_checkpoint(trainer, HELMBertPermeabilityLightning, strict=False)
 
     if datamodule.test_dataset is None:
         logger.warning("No test dataset found, skipping evaluation")
@@ -202,7 +202,7 @@ def main():
 
     log_summary(logger, training_duration, output_dir)
     mark_completion(output_dir)
-    log_completion(logger, "Permeability single training")
+    log_completion(logger, "Permeability training")
 
 
 if __name__ == "__main__":

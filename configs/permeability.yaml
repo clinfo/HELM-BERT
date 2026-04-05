@@ -1,19 +1,19 @@
 # =============================================================================
-# HELM-BERT Permeability Single-Assay Regression Configuration
+# HELM-BERT Permeability Regression Configuration
 # =============================================================================
 # Inherits common settings from default.yaml.
-# Do not use directly — use permeability_single_random.yaml or permeability_single_scaffold.yaml instead.
+# Do not use directly — use permeability_random.yaml or permeability_scaffold.yaml instead.
 #
 # Usage:
-#   python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml
-#   python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml
+#   python scripts/train_permeability.py --config configs/permeability_random.yaml
+#   python scripts/train_permeability.py --config configs/permeability_scaffold.yaml
 
 # =============================================================================
 # Paths
 # =============================================================================
 paths:
-  output_dir: ./outputs/permeability_single
-  results_dir: ./results/permeability_single
+  output_dir: ./outputs/permeability
+  results_dir: ./results/permeability
 
 # =============================================================================
 # Model

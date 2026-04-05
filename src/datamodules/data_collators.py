@@ -103,46 +103,6 @@ class DataCollatorForRegression:
 
 
 @dataclass
-class DataCollatorForPermeabilityMultiRegression:
-    """DataCollator for permeability multi-assay regression (PAMPA + Caco2).
-
-    Handles dynamic padding and tensorization of per-assay targets and masks.
-
-    Args:
-        tokenizer: Tokenizer for padding
-        assay_names: List of assay names (e.g., ["pampa", "caco2"])
-        pad_to_multiple_of: Pad to multiple of this value (optional)
-    """
-
-    tokenizer: PreTrainedTokenizer
-    assay_names: List[str]
-    pad_to_multiple_of: Optional[int] = None
-
-    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
-        sequence_features = [
-            {"input_ids": f["input_ids"], "attention_mask": f["attention_mask"]}
-            for f in features
-        ]
-
-        batch = self.tokenizer.pad(
-            sequence_features,
-            padding=True,
-            pad_to_multiple_of=self.pad_to_multiple_of,
-            return_tensors="pt",
-        )
-
-        for name in self.assay_names:
-            batch[f"target_{name}"] = torch.tensor(
-                [f[f"target_{name}"] for f in features], dtype=torch.float32
-            )
-            batch[f"mask_{name}"] = torch.tensor(
-                [f[f"mask_{name}"] for f in features], dtype=torch.float32
-            )
-
-        return batch
-
-
-@dataclass
 class DataCollatorForPPI:
     """DataCollator for PPI with dual sequences.
 

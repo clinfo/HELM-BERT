@@ -1,4 +1,4 @@
-"""HELM-BERT Permeability Single-Assay Prediction Lightning Module.
+"""HELM-BERT Permeability Prediction Lightning Module.
 
 Evidential Deep Learning via Normal-Inverse-Gamma (NIG) distribution.
 Outputs (gamma, nu, alpha, beta) per sample for uncertainty-aware regression.
@@ -30,8 +30,8 @@ NIG_NUM_OUTPUTS = 4
 
 
 @dataclass
-class PermeabilitySingleTrainingConfig:
-    """Configuration for permeability single-assay training.
+class PermeabilityTrainingConfig:
+    """Configuration for permeability training.
 
     All fields are required - values come from YAML configuration.
     """
@@ -50,22 +50,22 @@ class PermeabilitySingleTrainingConfig:
     decay_ratio: float = 0.10
 
 
-class HELMBertPermeabilitySingleLightning(L.LightningModule):
-    """PyTorch Lightning module for permeability single-assay evidential prediction.
+class HELMBertPermeabilityLightning(L.LightningModule):
+    """PyTorch Lightning module for evidential permeability prediction.
 
     Uses HELMBertForSequenceClassification with NIG output head.
     Outputs 4 parameters (gamma, nu, alpha, beta) per sample.
 
     Args:
         model_name_or_path: HuggingFace Hub model ID or local path (required)
-        training_config: PermeabilitySingleTrainingConfig for training settings (required)
+        training_config: PermeabilityTrainingConfig for training settings (required)
         trust_remote_code: Whether to trust remote code from HuggingFace Hub
     """
 
     def __init__(
         self,
         model_name_or_path: str,
-        training_config: PermeabilitySingleTrainingConfig,
+        training_config: PermeabilityTrainingConfig,
         trust_remote_code: bool = True,
     ):
         super().__init__()
@@ -116,7 +116,7 @@ class HELMBertPermeabilitySingleLightning(L.LightningModule):
         encoder_params = sum(p.numel() for p in self._encoder.parameters())
         classifier_params = sum(p.numel() for p in self.model.classifier.parameters())
 
-        logger.info("Permeability Single Model Configuration (Evidential NIG):")
+        logger.info("Permeability Model Configuration (Evidential NIG):")
         logger.info(f"  Encoder parameters: {encoder_params:,}")
         logger.info(f"  Classifier parameters: {classifier_params:,}")
         logger.info(f"  Total parameters: {total_params:,}")

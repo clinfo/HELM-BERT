@@ -39,13 +39,9 @@ uv pip install -r requirements.txt
 ## Quick Start
 
 ```bash
-# Permeability single-assay (choose split)
-python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml
-python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml
-
-# Permeability multi-assay (choose split)
-python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
-python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml
+# Permeability (choose split)
+python scripts/train_permeability.py --config configs/permeability_random.yaml
+python scripts/train_permeability.py --config configs/permeability_scaffold.yaml
 
 # PPI classification (choose split)
 python scripts/train_ppi.py --config configs/ppi_random.yaml
@@ -102,29 +98,23 @@ python scripts/train_mlm.py --from_scratch \
 ### Permeability Prediction
 
 ```bash
-# Single-assay (random split)
-python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml
+# Random split
+python scripts/train_permeability.py --config configs/permeability_random.yaml
 
-# Single-assay (scaffold split)
-python scripts/train_permeability_single.py --config configs/permeability_single_scaffold.yaml
-
-# Multi-assay (random split)
-python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
-
-# Multi-assay (scaffold split)
-python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml
+# Scaffold split
+python scripts/train_permeability.py --config configs/permeability_scaffold.yaml
 
 # Override settings
-python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml model.freeze_encoder=true training.head_lr=1e-3
+python scripts/train_permeability.py --config configs/permeability_random.yaml model.freeze_encoder=true training.head_lr=1e-3
 
 # Use local checkpoint
-python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml model.pretrained_path=./checkpoints/my-model
+python scripts/train_permeability.py --config configs/permeability_random.yaml model.pretrained_path=./checkpoints/my-model
 
 # Custom data
-python scripts/train_permeability_single.py --config configs/permeability_single_random.yaml data.train_file=./data/train.csv data.test_file=./data/test.csv
+python scripts/train_permeability.py --config configs/permeability_random.yaml data.train_file=./data/train.csv data.test_file=./data/test.csv
 ```
 
-**Key configuration options** (`configs/permeability_single.yaml` / `configs/permeability_multi.yaml`):
+**Key configuration options** (`configs/permeability.yaml`):
 
 | Config Key | Default | Description |
 |------------|---------|-------------|
@@ -199,21 +189,14 @@ The `evidence.lambda_coeff` controls the regularization strength between task lo
 
 ### Permeability Regression (CycPeptMPDB)
 
-**Single-Assay** (mixed assay target):
-
-| Split | R² | Pearson | RMSE | MAE |
-|:-----:|:--:|:-------:|:----:|:---:|
-| Random | 0.769 | 0.878 | 0.388 | 0.269 |
-| Scaffold | 0.643 | 0.812 | 0.380 | 0.284 |
-
-**Multi-Assay** (separate PAMPA and Caco-2 heads):
-
-| Split | Assay | R² | Pearson | RMSE | MAE |
-|:-----:|:-----:|:--:|:-------:|:----:|:---:|
-| Random | PAMPA | 0.711 | 0.844 | 0.426 | 0.298 |
-| Random | Caco-2 | 0.772 | 0.878 | 0.402 | 0.305 |
-| Scaffold | PAMPA | 0.584 | 0.788 | 0.393 | 0.299 |
-| Scaffold | Caco-2 | 0.701 | 0.846 | 0.381 | 0.287 |
+| Split | Target | R² | Pearson | RMSE | MAE |
+|:-----:|:------:|:--:|:-------:|:----:|:---:|
+| Random | Mixed | 0.769 | 0.878 | 0.388 | 0.269 |
+| Random | PAMPA | 0.765 | 0.875 | 0.384 | 0.275 |
+| Random | Caco-2 | 0.758 | 0.876 | 0.414 | 0.303 |
+| Scaffold | Mixed | 0.643 | 0.812 | 0.380 | 0.284 |
+| Scaffold | PAMPA | 0.627 | 0.810 | 0.372 | 0.281 |
+| Scaffold | Caco-2 | 0.698 | 0.849 | 0.383 | 0.287 |
 
 Train/test 9:1, val 10% from train. Scaffold split by Murcko scaffolds.
 
