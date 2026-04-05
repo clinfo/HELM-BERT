@@ -199,7 +199,7 @@ The `evidence.lambda_coeff` controls the regularization strength between task lo
 
 ### Permeability Regression (CycPeptMPDB)
 
-**Single-Assay** (mixed PAMPA/Caco-2 target):
+**Single-Assay** (mixed assay target):
 
 | Split | R² | Pearson | RMSE | MAE |
 |:-----:|:--:|:-------:|:----:|:---:|
