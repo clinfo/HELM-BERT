@@ -1,4 +1,4 @@
-"""Multi-Assay Permeability DataModule with per-assay targets and masks."""
+"""Permeability Multi-Assay DataModule with per-assay targets and masks."""
 
 import logging
 from dataclasses import dataclass
@@ -11,15 +11,15 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from transformers import PreTrainedTokenizer
 
-from .data_collators import DataCollatorForMultiAssayRegression
-from .datasets import MultiAssayHELMDataset
+from .data_collators import DataCollatorForPermeabilityMultiRegression
+from .datasets import PermeabilityMultiHELMDataset
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class MultiAssayDataConfig:
-    """Configuration for multi-assay DataModule.
+class PermeabilityMultiDataConfig:
+    """Configuration for permeability multi-assay DataModule.
 
     All fields are required - values come from YAML configuration.
     """
@@ -36,19 +36,19 @@ class MultiAssayDataConfig:
     seed: int
 
 
-class MultiAssayDataModule(L.LightningDataModule):
-    """DataModule for multi-assay permeability regression.
+class PermeabilityMultiDataModule(L.LightningDataModule):
+    """DataModule for permeability multi-assay regression.
 
     Loads multiple assay target columns with missing-value masks.
 
     Args:
-        config: MultiAssayDataConfig for data loading settings
+        config: PermeabilityMultiDataConfig for data loading settings
         tokenizer: PreTrainedTokenizer instance
     """
 
     def __init__(
         self,
-        config: MultiAssayDataConfig,
+        config: PermeabilityMultiDataConfig,
         tokenizer: PreTrainedTokenizer,
     ):
         super().__init__()
@@ -64,7 +64,7 @@ class MultiAssayDataModule(L.LightningDataModule):
         # Lowercase assay names for batch keys
         self.assay_keys = [col.lower() for col in self.config.assay_columns]
 
-        self._collate_fn = DataCollatorForMultiAssayRegression(
+        self._collate_fn = DataCollatorForPermeabilityMultiRegression(
             tokenizer=self.tokenizer,
             assay_names=self.assay_keys,
         )
@@ -101,12 +101,12 @@ class MultiAssayDataModule(L.LightningDataModule):
 
         self._compute_statistics(train_df, val_df, test_df)
 
-    def _create_dataset(self, df: pd.DataFrame) -> MultiAssayHELMDataset:
+    def _create_dataset(self, df: pd.DataFrame) -> PermeabilityMultiHELMDataset:
         assay_values = {}
         for col, key in zip(self.config.assay_columns, self.assay_keys):
             assay_values[key] = df[col].tolist()
 
-        return MultiAssayHELMDataset(
+        return PermeabilityMultiHELMDataset(
             sequences=df[self.config.helm_column].tolist(),
             assay_values=assay_values,
             tokenizer=self.tokenizer,

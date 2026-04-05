@@ -1,5 +1,5 @@
 # =============================================================================
-# Multi-Assay Permeability - Random Split
+# Permeability Multi-Assay - Random Split
 # =============================================================================
 # Usage: python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
 

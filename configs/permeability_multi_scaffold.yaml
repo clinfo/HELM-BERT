@@ -1,5 +1,5 @@
 # =============================================================================
-# Multi-Assay Permeability - Scaffold Split
+# Permeability Multi-Assay - Scaffold Split
 # =============================================================================
 # Usage: python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml
 

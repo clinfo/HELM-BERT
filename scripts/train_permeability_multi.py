@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Multi-assay permeability regression training script (PAMPA + Caco2).
+"""Permeability multi-assay regression training script (PAMPA + Caco2).
 
 Usage:
     python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml
@@ -43,11 +43,11 @@ from scripts.training_utils import (
     to_dict,
     build_tags,
 )
-from src.datamodules.permeability_multi_datamodule import MultiAssayDataConfig, MultiAssayDataModule
+from src.datamodules.permeability_multi_datamodule import PermeabilityMultiDataConfig, PermeabilityMultiDataModule
 from src.models.permeability_multi_lightning import (
     ASSAY_NAMES,
-    HELMBertMultiAssayLightning,
-    MultiAssayTrainingConfig,
+    HELMBertPermeabilityMultiLightning,
+    PermeabilityMultiTrainingConfig,
 )
 
 
@@ -55,7 +55,7 @@ def main():
     start_time = time.time()
 
     if "--config" not in sys.argv:
-        print("Error: --config is required for multi-assay training.")
+        print("Error: --config is required for permeability multi training.")
         print("  python scripts/train_permeability_multi.py --config configs/permeability_multi_random.yaml")
         print("  python scripts/train_permeability_multi.py --config configs/permeability_multi_scaffold.yaml")
         sys.exit(1)
@@ -71,10 +71,10 @@ def main():
     run_name = f"permeability_multi_{config.data.split_name}_{get_model_tag(config)}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
-    logger = setup_logging(output_dir, timestamp, "train_multi_assay")
-    log_header(logger, "Multi-Assay Evidential Regression Training (PAMPA + Caco2)")
+    logger = setup_logging(output_dir, timestamp, "train_permeability_multi")
+    log_header(logger, "Permeability Multi Evidential Regression Training (PAMPA + Caco2)")
 
-    data_config = MultiAssayDataConfig(
+    data_config = PermeabilityMultiDataConfig(
         train_file=config.data.train_file,
         test_file=config.data.test_file,
         helm_column=config.data.helm_column,
@@ -106,14 +106,14 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(
         config.model.pretrained_path, trust_remote_code=config.model.trust_remote_code
     )
-    datamodule = MultiAssayDataModule(config=data_config, tokenizer=tokenizer)
+    datamodule = PermeabilityMultiDataModule(config=data_config, tokenizer=tokenizer)
 
     datamodule.setup("fit")
     steps_per_epoch = len(datamodule.train_dataloader())
     total_steps = steps_per_epoch * config.training.max_epochs
     logger.info(f"WSD scheduler: {total_steps} total steps ({steps_per_epoch} steps/epoch × {config.training.max_epochs} epochs)")
 
-    training_config = MultiAssayTrainingConfig(
+    training_config = PermeabilityMultiTrainingConfig(
         encoder_lr=config.training.encoder_lr,
         head_lr=config.training.head_lr,
         weight_decay=config.training.weight_decay,
@@ -128,7 +128,7 @@ def main():
         decay_ratio=config.training.decay_ratio,
     )
 
-    model = HELMBertMultiAssayLightning(
+    model = HELMBertPermeabilityMultiLightning(
         model_name_or_path=config.model.pretrained_path,
         training_config=training_config,
         trust_remote_code=config.model.trust_remote_code,
@@ -143,7 +143,7 @@ def main():
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
-        tags=build_tags(config, ["permeability", "multi-assay", "downstream", "regression", "evidential", config.data.split_name]),
+        tags=build_tags(config, ["permeability", "permeability-multi", "downstream", "regression", "evidential", config.data.split_name]),
     )
 
     trainer = L.Trainer(
@@ -158,13 +158,13 @@ def main():
         log_every_n_steps=config.trainer.log_every_n_steps,
     )
 
-    log_training_start(logger, "multi-assay permeability training")
+    log_training_start(logger, "permeability multi training")
     trainer.fit(model, datamodule)
 
     training_duration = time.time() - start_time
 
     logger.info(f"Loading best model from: {trainer.checkpoint_callback.best_model_path}")
-    model = load_best_checkpoint(trainer, HELMBertMultiAssayLightning, strict=False)
+    model = load_best_checkpoint(trainer, HELMBertPermeabilityMultiLightning, strict=False)
 
     if datamodule.test_dataset is None:
         logger.warning("No test dataset found, skipping evaluation")
@@ -208,7 +208,7 @@ def main():
 
     log_summary(logger, training_duration, output_dir)
     mark_completion(output_dir)
-    log_completion(logger, "Multi-assay permeability training")
+    log_completion(logger, "Permeability multi training")
 
 
 if __name__ == "__main__":

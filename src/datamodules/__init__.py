@@ -2,56 +2,56 @@
 
 from .batch_types import (
     MLMBatch,
-    MultiAssayBatch,
-    PermeabilityBatch,
+    PermeabilitySingleBatch,
+    PermeabilityMultiBatch,
     PPIBatchEmbedding,
     PPIBatchTokenized,
 )
 from .data_collators import (
     DataCollatorForMLM,
-    DataCollatorForMultiAssayRegression,
+    DataCollatorForPermeabilityMultiRegression,
     DataCollatorForPPI,
     DataCollatorForPPIEmbedding,
     DataCollatorForRegression,
 )
-from .datasets import HELMDataset, MLMDataset, MultiAssayHELMDataset
+from .datasets import HELMDataset, MLMDataset, PermeabilityMultiHELMDataset
 from .dual_sequence_dataset import DualSequenceDataset
 from .embedding_only_dataset import EmbeddingOnlyDataset
 from .mlm_datamodule import DatasetInfo, MLMDataConfig, MLMDataModule
-from .permeability_multi_datamodule import MultiAssayDataConfig, MultiAssayDataModule
-from .permeability_datamodule import PermeabilityDataConfig, PermeabilityDataModule
+from .permeability_multi_datamodule import PermeabilityMultiDataConfig, PermeabilityMultiDataModule
+from .permeability_single_datamodule import PermeabilitySingleDataConfig, PermeabilitySingleDataModule
 from .ppi_datamodule import PPIDataConfig, PPIDataModule
 from .span_masking import SpanMasking, SpanMaskingConfig
 
 __all__ = [
     # Batch Types
     "MLMBatch",
-    "MultiAssayBatch",
-    "PermeabilityBatch",
+    "PermeabilityMultiBatch",
+    "PermeabilitySingleBatch",
     "PPIBatchTokenized",
     "PPIBatchEmbedding",
     # Data Collators
     "DataCollatorForMLM",
-    "DataCollatorForMultiAssayRegression",
+    "DataCollatorForPermeabilityMultiRegression",
     "DataCollatorForRegression",
     "DataCollatorForPPI",
     "DataCollatorForPPIEmbedding",
     # Datasets
     "MLMDataset",
     "HELMDataset",
-    "MultiAssayHELMDataset",
+    "PermeabilityMultiHELMDataset",
     "DualSequenceDataset",
     "EmbeddingOnlyDataset",
     # MLM DataModule
     "MLMDataModule",
     "MLMDataConfig",
     "DatasetInfo",
-    # Multi-Assay DataModule
-    "MultiAssayDataModule",
-    "MultiAssayDataConfig",
-    # Permeability DataModule
-    "PermeabilityDataModule",
-    "PermeabilityDataConfig",
+    # Permeability Single DataModule
+    "PermeabilitySingleDataModule",
+    "PermeabilitySingleDataConfig",
+    # Permeability Multi DataModule
+    "PermeabilityMultiDataModule",
+    "PermeabilityMultiDataConfig",
     # PPI DataModule
     "PPIDataModule",
     "PPIDataConfig",

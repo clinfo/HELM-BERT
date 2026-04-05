@@ -1,4 +1,4 @@
-"""HELM-BERT Multi-Assay Permeability Prediction Lightning Module.
+"""HELM-BERT Permeability Multi-Assay Prediction Lightning Module.
 
 Two-head NIG evidential regression for PAMPA and Caco2 assays.
 Shared backbone with split output: 4 NIG params per assay head.
@@ -29,8 +29,8 @@ TOTAL_OUTPUTS = NUM_ASSAYS * NIG_NUM_OUTPUTS
 
 
 @dataclass
-class MultiAssayTrainingConfig:
-    """Configuration for multi-assay training."""
+class PermeabilityMultiTrainingConfig:
+    """Configuration for permeability multi-assay training."""
 
     encoder_lr: float
     head_lr: float
@@ -46,22 +46,22 @@ class MultiAssayTrainingConfig:
     decay_ratio: float = 0.10
 
 
-class HELMBertMultiAssayLightning(L.LightningModule):
-    """Multi-assay evidential permeability prediction.
+class HELMBertPermeabilityMultiLightning(L.LightningModule):
+    """Permeability multi-assay evidential prediction.
 
     Shared backbone, output dimension = NUM_ASSAYS * 4 (NIG params per head).
     Logits are split and independently parameterized for each assay.
 
     Args:
         model_name_or_path: HuggingFace Hub model ID or local path
-        training_config: MultiAssayTrainingConfig
+        training_config: PermeabilityMultiTrainingConfig
         trust_remote_code: Whether to trust remote code from HuggingFace Hub
     """
 
     def __init__(
         self,
         model_name_or_path: str,
-        training_config: MultiAssayTrainingConfig,
+        training_config: PermeabilityMultiTrainingConfig,
         trust_remote_code: bool = True,
     ):
         super().__init__()
@@ -107,7 +107,7 @@ class HELMBertMultiAssayLightning(L.LightningModule):
         encoder_params = sum(p.numel() for p in self._encoder.parameters())
         classifier_params = sum(p.numel() for p in self.model.classifier.parameters())
 
-        logger.info("Multi-Assay Model Configuration (Evidential NIG × 2):")
+        logger.info("Permeability Multi Model Configuration (Evidential NIG × 2):")
         logger.info(f"  Assays: {ASSAY_NAMES}")
         logger.info(f"  Encoder parameters: {encoder_params:,}")
         logger.info(f"  Classifier parameters: {classifier_params:,}")

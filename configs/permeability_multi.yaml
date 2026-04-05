@@ -1,5 +1,5 @@
 # =============================================================================
-# HELM-BERT Multi-Assay Permeability Regression Configuration
+# HELM-BERT Permeability Multi-Assay Regression Configuration
 # =============================================================================
 # Two-head NIG evidential regression: PAMPA + Caco2.
 # Inherits common settings from default.yaml.

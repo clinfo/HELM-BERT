@@ -103,8 +103,8 @@ class DataCollatorForRegression:
 
 
 @dataclass
-class DataCollatorForMultiAssayRegression:
-    """DataCollator for multi-assay regression (e.g., PAMPA + Caco2).
+class DataCollatorForPermeabilityMultiRegression:
+    """DataCollator for permeability multi-assay regression (PAMPA + Caco2).
 
     Handles dynamic padding and tensorization of per-assay targets and masks.
 

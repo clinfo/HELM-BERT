@@ -112,7 +112,7 @@ class HELMDataset(Dataset):
         }
 
 
-class MultiAssayHELMDataset(Dataset):
+class PermeabilityMultiHELMDataset(Dataset):
     """Dataset for HELM sequences with multiple assay targets.
 
     Handles missing labels via per-assay masks.

@@ -68,7 +68,7 @@ def greedy_scaffold_partition(
     """Greedily assign scaffold groups into test/train.
 
     Groups are assumed to be sorted largest-first. The same direct assignment
-    procedure is shared across single-task and multi-assay splits; only the
+    procedure is shared across permeability single and multi splits; only the
     state representation and comparison key differ.
     """
     test_groups: List[List[int]] = []
