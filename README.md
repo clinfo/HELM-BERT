@@ -220,11 +220,12 @@ Val 10% from train, 1:4 positive:negative ratio.
 | Split | Train | Test | R² | Pearson | RMSE | MAE |
 |:-----:|:-----:|:----:|:--:|:-------:|:----:|:---:|
 | Random | 267 | 30 | 0.312 | 0.600 | 0.742 | 0.499 |
-| Scaffold | 267 | 30 | 0.078 | 0.532 | 1.154 | 0.821 |
+| Scaffold | 268 | 29 | 0.006 | 0.236 | 0.632 | 0.551 |
 
 Val 10% from train. Scaffold split by Murcko scaffolds.
 
 <p align="center"><img src="assets/tsne_sst2_splits.png" width="800"></p>
+
 
 ## Paper Checkpoint
 
