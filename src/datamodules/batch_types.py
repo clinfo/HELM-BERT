@@ -20,8 +20,8 @@ class MLMBatch(TypedDict):
     labels: torch.Tensor  # (batch, seq_len) - original tokens, -100 for non-masked
 
 
-class PermeabilityBatch(TypedDict):
-    """Batch for permeability regression.
+class RegressionBatch(TypedDict):
+    """Batch for regression tasks.
 
     Produced by DataCollatorForRegression.
     """

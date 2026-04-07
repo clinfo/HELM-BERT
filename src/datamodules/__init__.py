@@ -2,7 +2,7 @@
 
 from .batch_types import (
     MLMBatch,
-    PermeabilityBatch,
+    RegressionBatch,
     PPIBatchEmbedding,
     PPIBatchTokenized,
 )
@@ -16,14 +16,14 @@ from .datasets import HELMDataset, MLMDataset
 from .dual_sequence_dataset import DualSequenceDataset
 from .embedding_only_dataset import EmbeddingOnlyDataset
 from .mlm_datamodule import DatasetInfo, MLMDataConfig, MLMDataModule
-from .permeability_datamodule import PermeabilityDataConfig, PermeabilityDataModule
+from .regression_datamodule import RegressionDataConfig, RegressionDataModule
 from .ppi_datamodule import PPIDataConfig, PPIDataModule
 from .span_masking import SpanMasking, SpanMaskingConfig
 
 __all__ = [
     # Batch Types
     "MLMBatch",
-    "PermeabilityBatch",
+    "RegressionBatch",
     "PPIBatchTokenized",
     "PPIBatchEmbedding",
     # Data Collators
@@ -40,9 +40,9 @@ __all__ = [
     "MLMDataModule",
     "MLMDataConfig",
     "DatasetInfo",
-    # Permeability DataModule
-    "PermeabilityDataModule",
-    "PermeabilityDataConfig",
+    # Regression DataModule
+    "RegressionDataModule",
+    "RegressionDataConfig",
     # PPI DataModule
     "PPIDataModule",
     "PPIDataConfig",

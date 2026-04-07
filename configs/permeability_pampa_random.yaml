@@ -1,7 +1,7 @@
 # =============================================================================
 # Permeability - PAMPA only, Random Split
 # =============================================================================
-# Usage: python scripts/train_permeability.py --config configs/permeability_pampa_random.yaml
+# Usage: python scripts/train_regression.py --config configs/permeability_pampa_random.yaml
 
 training:
   max_epochs: 100

@@ -1,23 +1,23 @@
 #!/usr/bin/env python
-"""Visualize permeability train/val/test split distributions via t-SNE.
+"""Visualize SST2 train/val/test split distributions via t-SNE.
 
 Uses Morgan fingerprints (ECFP4) from SMILES to embed molecules into 2D.
 
 Usage:
     # Combined figure: Random + Scaffold side by side (default)
-    python scripts/visualize_permeability_splits.py
+    python scripts/visualize_sst2_splits.py
 
     # Single split only
-    python scripts/visualize_permeability_splits.py --split random
-    python scripts/visualize_permeability_splits.py --split scaffold
+    python scripts/visualize_sst2_splits.py --split random
+    python scripts/visualize_sst2_splits.py --split scaffold
 
     # Legend bar only
-    python scripts/visualize_permeability_splits.py --legend
+    python scripts/visualize_sst2_splits.py --legend
 
 Output:
-    results/visualization/tsne_permeability_splits_{timestamp}.pdf/.png
-    results/visualization/tsne_permeability_{split}_{timestamp}.pdf/.png
-    results/visualization/tsne_permeability_legend_{timestamp}.pdf/.png
+    results/visualization/tsne_sst2_splits_{timestamp}.pdf/.png
+    results/visualization/tsne_sst2_{split}_{timestamp}.pdf/.png
+    results/visualization/tsne_sst2_legend_{timestamp}.pdf/.png
 """
 
 from __future__ import annotations
@@ -52,20 +52,20 @@ FP_RADIUS = 2
 FP_NBITS = 2048
 JITTER_SCALE = 0.3
 
-SMILES_COL = "SMILES"
+SMILES_COL = "canonical_smiles"
 
 ALL_SPLITS: List[Dict[str, str]] = [
     {
         "name": "Random Split",
         "tag": "random",
-        "train_file": "data/downstream/cycpeptmpdb_permeability_random_train.csv",
-        "test_file": "data/downstream/cycpeptmpdb_permeability_random_test.csv",
+        "train_file": "data/downstream/sst2_random_train.csv",
+        "test_file": "data/downstream/sst2_random_test.csv",
     },
     {
         "name": "Scaffold Split",
         "tag": "scaffold",
-        "train_file": "data/downstream/cycpeptmpdb_permeability_scaffold_train.csv",
-        "test_file": "data/downstream/cycpeptmpdb_permeability_scaffold_test.csv",
+        "train_file": "data/downstream/sst2_scaffold_train.csv",
+        "test_file": "data/downstream/sst2_scaffold_test.csv",
     },
 ]
 
@@ -87,7 +87,7 @@ logger = logging.getLogger(__name__)
 def setup_logging(log_dir: Path) -> logging.Logger:
     log_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = log_dir / f"visualize_permeability_splits_{timestamp}.log"
+    log_file = log_dir / f"visualize_sst2_splits_{timestamp}.log"
 
     lg = logging.getLogger(__name__)
     lg.setLevel(LOG_LEVEL)
@@ -189,8 +189,8 @@ def _scatter_splits(ax, Z: np.ndarray, split_labels: np.ndarray, jitter: float =
                 Z[mask, 0],
                 Z[mask, 1],
                 c=SPLIT_COLORS[split],
-                alpha=0.4,
-                s=15,
+                alpha=0.7,
+                s=40,
                 edgecolors="none",
             )
 
@@ -226,7 +226,7 @@ def run_legend(results_dir: Path) -> None:
         columnspacing=2.0,
     )
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_permeability_legend_{timestamp}")
+    _save(fig, results_dir / f"tsne_sst2_legend_{timestamp}")
 
 
 def run_single(split_tag: str, results_dir: Path, jitter: float) -> None:
@@ -241,7 +241,7 @@ def run_single(split_tag: str, results_dir: Path, jitter: float) -> None:
     fig.tight_layout()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_permeability_{split_tag}_{timestamp}")
+    _save(fig, results_dir / f"tsne_sst2_{split_tag}_{timestamp}")
 
 
 def run_combined(results_dir: Path, jitter: float) -> None:
@@ -255,6 +255,8 @@ def run_combined(results_dir: Path, jitter: float) -> None:
         split_dfs.append((split_info, train_df, test_df))
 
     canonical_list = sorted(all_smiles)
+    smiles_to_idx = {s: i for i, s in enumerate(canonical_list)}
+
     logger.info(f"Computing shared t-SNE on {len(canonical_list)} unique molecules")
     X, valid_idx = smiles_to_fingerprints(canonical_list)
     Z = run_tsne(X)
@@ -300,7 +302,7 @@ def run_combined(results_dir: Path, jitter: float) -> None:
         handlelength=2.5,
     )
     fig.suptitle(
-        "t-SNE of Permeability Splits (Morgan Fingerprints)",
+        "t-SNE of SST2 Splits (Morgan Fingerprints)",
         fontsize=16,
         fontweight="bold",
         y=1.02,
@@ -308,22 +310,22 @@ def run_combined(results_dir: Path, jitter: float) -> None:
     fig.tight_layout()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_permeability_splits_{timestamp}")
+    _save(fig, results_dir / f"tsne_sst2_splits_{timestamp}")
 
 
 def main() -> None:
     global logger
 
     parser = argparse.ArgumentParser(
-        description="Visualize permeability train/val/test split distributions via t-SNE",
+        description="Visualize SST2 train/val/test split distributions via t-SNE",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python scripts/visualize_permeability_splits.py                     # combined\n"
-            "  python scripts/visualize_permeability_splits.py --split random      # single\n"
-            "  python scripts/visualize_permeability_splits.py --split scaffold    # single\n"
-            "  python scripts/visualize_permeability_splits.py --legend            # legend only\n"
-            "  python scripts/visualize_permeability_splits.py --jitter 0.5        # custom jitter\n"
+            "  python scripts/visualize_sst2_splits.py                     # combined\n"
+            "  python scripts/visualize_sst2_splits.py --split random      # single\n"
+            "  python scripts/visualize_sst2_splits.py --split scaffold    # single\n"
+            "  python scripts/visualize_sst2_splits.py --legend            # legend only\n"
+            "  python scripts/visualize_sst2_splits.py --jitter 0.5        # custom jitter\n"
         ),
     )
     parser.add_argument(
@@ -350,11 +352,11 @@ def main() -> None:
 
     logger.info("=" * 60)
     if args.legend:
-        logger.info("Permeability Split Visualization: legend only")
+        logger.info("SST2 Split Visualization: legend only")
     elif args.split:
-        logger.info(f"Permeability Split Visualization: single ({args.split})")
+        logger.info(f"SST2 Split Visualization: single ({args.split})")
     else:
-        logger.info("Permeability Split Visualization: combined (all splits)")
+        logger.info("SST2 Split Visualization: combined (all splits)")
     logger.info("=" * 60)
     logger.info(f"Results: {results_dir}")
     logger.info(f"Jitter: {args.jitter}")

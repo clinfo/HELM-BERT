@@ -80,7 +80,7 @@ def load_config(task: str, argv: List[str] = None) -> DictConfig:
         - Argparse: --batch_size 128 (mapped to training.batch_size)
 
     Args:
-        task: Task name (mlm, permeability, ppi)
+        task: Task name (mlm, regression, ppi)
         argv: Command line arguments (default: sys.argv[1:])
 
     Returns:

@@ -1,7 +1,7 @@
 # =============================================================================
 # Permeability - Random Split (mixed target)
 # =============================================================================
-# Usage: python scripts/train_permeability.py --config configs/permeability_random.yaml
+# Usage: python scripts/train_regression.py --config configs/permeability_random.yaml
 
 training:
   max_epochs: 100
