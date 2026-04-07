@@ -78,37 +78,49 @@ def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
 def scaffold_split(
     df: pd.DataFrame, test_ratio: float
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Split by Murcko scaffold, assigning largest groups to train first.
+    """Split by Murcko scaffold, packing small multi-molecule groups into test.
 
-    Standard approach (DeepChem/MoleculeNet): fill train with the largest
-    scaffold groups first, then the remainder goes to test.  This gives the
-    test set a natural mix of medium and small scaffolds unseen during
-    training.  Deterministic (no randomness).
+    Strategy:
+      1. Oversized groups (> target_test // 4) go to train.
+      2. Singletons go to train.
+      3. Remaining multi-molecule groups fill test, smallest first.
     """
     groups = build_scaffold_groups(df[SMILES_COL].tolist())
     logger.info(f"Found {len(groups)} unique scaffolds from {len(df)} molecules")
 
-    target_train_size = round(len(df) * (1 - test_ratio))
+    target_test_size = round(len(df) * test_ratio)
+    max_group_size = target_test_size // 2
 
-    largest_first = sorted(groups, key=lambda g: (len(g), g[0]), reverse=True)
+    # Sort eligible multi-molecule groups largest-first for packing
+    indexed = [(i, len(g)) for i, g in enumerate(groups)]
+    eligible = sorted([(i, s) for i, s in indexed if 2 <= s <= max_group_size], key=lambda x: (x[1], x[0]), reverse=True)
+    singletons = [i for i, s in indexed if s == 1]
+    oversized = [i for i, s in indexed if s > max_group_size]
 
-    train_indices: list[int] = []
     test_indices: list[int] = []
-    train_size = 0
+    train_indices: list[int] = []
+    test_size = 0
 
-    for group in largest_first:
-        if train_size + len(group) <= target_train_size:
-            train_indices.extend(group)
-            train_size += len(group)
+    for i, size in eligible:
+        if test_size + size <= target_test_size:
+            test_indices.extend(groups[i])
+            test_size += size
         else:
-            test_indices.extend(group)
+            train_indices.extend(groups[i])
+
+    for i in oversized + singletons:
+        train_indices.extend(groups[i])
 
     train_df = df.iloc[train_indices].reset_index(drop=True)
     test_df = df.iloc[test_indices].reset_index(drop=True)
 
+    test_group_sizes = sorted(
+        [len(groups[i]) for i, _ in eligible if all(idx in test_indices for idx in groups[i][:1])],
+        reverse=True,
+    )
     logger.info(
         f"Scaffold split: {len(train_df)} train, {len(test_df)} test "
-        f"(target_train={target_train_size}, actual ratio={len(test_df)/len(df):.3f})"
+        f"(target={target_test_size}, actual ratio={len(test_df)/len(df):.3f})"
     )
     return train_df, test_df
 
