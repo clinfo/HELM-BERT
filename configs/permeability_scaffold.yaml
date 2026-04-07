@@ -1,7 +1,7 @@
 # =============================================================================
 # Permeability - Scaffold Split (mixed target)
 # =============================================================================
-# Usage: python scripts/train_permeability.py --config configs/permeability_scaffold.yaml
+# Usage: python scripts/train_regression.py --config configs/permeability_scaffold.yaml
 
 training:
   max_epochs: 100

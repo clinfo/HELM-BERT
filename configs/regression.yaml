@@ -1,26 +1,26 @@
 # =============================================================================
-# HELM-BERT Permeability Regression Configuration
+# HELM-BERT Evidential Regression Configuration
 # =============================================================================
 # Inherits common settings from default.yaml.
-# Do not use directly — use permeability_random.yaml or permeability_scaffold.yaml instead.
+# Do not use directly — use permeability_random.yaml, sst2_random.yaml, etc.
 #
 # Usage:
-#   python scripts/train_permeability.py --config configs/permeability_random.yaml
-#   python scripts/train_permeability.py --config configs/permeability_scaffold.yaml
+#   python scripts/train_regression.py --config configs/permeability_random.yaml
+#   python scripts/train_regression.py --config configs/sst2_random.yaml
 
 # =============================================================================
-# Paths
+# Paths (overridden by task-specific configs)
 # =============================================================================
 paths:
-  output_dir: ./outputs/permeability
-  results_dir: ./results/permeability
+  output_dir: ./outputs/regression
+  results_dir: ./results/regression
 
 # =============================================================================
 # Model
 # =============================================================================
 model:
   freeze_encoder: false
-  encoder_attribute_name: helmbert  # Attribute name to access encoder in the model
+  encoder_attribute_name: helmbert
 
   # Classifier head
   classifier:
@@ -37,12 +37,9 @@ training:
   head_lr: 1.0e-4
 
 # =============================================================================
-# Data
+# Data (overridden by task-specific configs)
 # =============================================================================
 data:
-  split_name: cycpeptmpdb_permeability_random
-  train_file: ./data/downstream/cycpeptmpdb_permeability_random_train.csv
-  test_file: ./data/downstream/cycpeptmpdb_permeability_random_test.csv
   helm_column: HELM
   target_column: Permeability
   val_ratio: 0.1

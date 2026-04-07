@@ -259,20 +259,62 @@ def run_single(config_path: str, results_dir: Path):
 
 
 def run_combined(results_dir: Path):
-    """Generate combined figure with legend bar at bottom."""
-    panels = []
+    """Generate combined figure with shared t-SNE embedding."""
+    configs = []
+    all_pos_pairs = []
     for config_path, subtitle in ALL_CONFIGS:
-        logger.info(f"\nProcessing: {subtitle} ({config_path})")
         config = load_config(config_path)
-        Z, split_labels = get_split_data(config)
-        panels.append((Z, split_labels, subtitle))
+        drug_col = config.data.drug_column
+        target_col = config.data.target_column
+        label_col = config.data.label_column
+        val_ratio = config.data.val_ratio
+
+        train_df = pd.read_csv(config.data.train_file)
+        test_df = pd.read_csv(config.data.test_file)
+        train_pos = train_df[train_df[label_col] == 1]
+        test_pos = test_df[test_df[label_col] == 1]
+
+        all_pos_pairs.append(pd.concat([train_pos, test_pos], ignore_index=True))
+        configs.append((config, subtitle, train_pos, test_pos, drug_col, target_col, val_ratio))
+
+    merged = pd.concat(all_pos_pairs, ignore_index=True).drop_duplicates(
+        subset=[configs[0][4], configs[0][5]], keep="first"
+    )
+    drug_col = configs[0][4]
+    target_col = configs[0][5]
+
+    logger.info(f"Computing shared t-SNE on {len(merged)} unique positive pairs")
+    X, valid_idx = load_acsm_signatures(merged, drug_col, target_col)
+    Z = run_tsne(X)
+
+    valid_pairs = [
+        (merged.iloc[i][drug_col], merged.iloc[i][target_col])
+        for i in valid_idx
+    ]
+    pair_to_z = {pair: Z[j] for j, pair in enumerate(valid_pairs)}
+
+    panels = []
+    for config, subtitle, train_pos, test_pos, d_col, t_col, val_ratio in configs:
+        logger.info(f"\n  {subtitle}")
+        train_split, val_split = train_test_split(train_pos, test_size=val_ratio, random_state=SEED)
+        logger.info(f"  Train: {len(train_split)}, Val: {len(val_split)}, Test: {len(test_pos)}")
+
+        z_list, label_list = [], []
+        for label, df_part in [("train", train_split), ("val", val_split), ("test", test_pos)]:
+            for _, row in df_part.iterrows():
+                pair = (row[d_col], row[t_col])
+                if pair in pair_to_z:
+                    z_list.append(pair_to_z[pair])
+                    label_list.append(label)
+
+        panels.append((np.array(z_list), np.array(label_list), subtitle))
 
     fig, axes = plt.subplots(1, len(panels), figsize=(8 * len(panels), 7))
     if len(panels) == 1:
         axes = [axes]
 
-    for ax, (Z, split_labels, subtitle) in zip(axes, panels):
-        _scatter_splits(ax, Z, split_labels)
+    for ax, (Z_panel, split_labels, subtitle) in zip(axes, panels):
+        _scatter_splits(ax, Z_panel, split_labels)
         ax.set_title(subtitle, fontsize=15, fontweight="bold")
 
     fig.legend(handles=_legend_handles(), loc="lower center", ncol=3,

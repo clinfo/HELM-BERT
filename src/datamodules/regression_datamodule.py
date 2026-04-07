@@ -1,4 +1,4 @@
-"""Permeability DataModule with DataCollator for dynamic padding."""
+"""Regression DataModule with DataCollator for dynamic padding."""
 
 import logging
 from dataclasses import dataclass
@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class PermeabilityDataConfig:
-    """Configuration for permeability DataModule.
+class RegressionDataConfig:
+    """Configuration for regression DataModule.
 
     All fields are required - values come from YAML configuration.
     """
@@ -36,19 +36,19 @@ class PermeabilityDataConfig:
     seed: int
 
 
-class PermeabilityDataModule(L.LightningDataModule):
-    """DataModule for permeability regression.
+class RegressionDataModule(L.LightningDataModule):
+    """DataModule for evidential regression.
 
     Uses DataCollator for dynamic padding at batch level.
 
     Args:
-        config: PermeabilityDataConfig for data loading settings
+        config: RegressionDataConfig for data loading settings
         tokenizer: PreTrainedTokenizer instance
     """
 
     def __init__(
         self,
-        config: PermeabilityDataConfig,
+        config: RegressionDataConfig,
         tokenizer: PreTrainedTokenizer,
     ):
         super().__init__()
