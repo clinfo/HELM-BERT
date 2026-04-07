@@ -40,8 +40,8 @@ uv pip install -r requirements.txt
 
 ```bash
 # Permeability (choose split)
-python scripts/train_permeability.py --config configs/permeability_random.yaml
-python scripts/train_permeability.py --config configs/permeability_scaffold.yaml
+python scripts/train_regression.py --config configs/permeability_random.yaml
+python scripts/train_regression.py --config configs/permeability_scaffold.yaml
 
 # PPI classification (choose split)
 python scripts/train_ppi.py --config configs/ppi_random.yaml
@@ -99,22 +99,22 @@ python scripts/train_mlm.py --from_scratch \
 
 ```bash
 # Random split
-python scripts/train_permeability.py --config configs/permeability_random.yaml
+python scripts/train_regression.py --config configs/permeability_random.yaml
 
 # Scaffold split
-python scripts/train_permeability.py --config configs/permeability_scaffold.yaml
+python scripts/train_regression.py --config configs/permeability_scaffold.yaml
 
 # Override settings
-python scripts/train_permeability.py --config configs/permeability_random.yaml model.freeze_encoder=true training.head_lr=1e-3
+python scripts/train_regression.py --config configs/permeability_random.yaml model.freeze_encoder=true training.head_lr=1e-3
 
 # Use local checkpoint
-python scripts/train_permeability.py --config configs/permeability_random.yaml model.pretrained_path=./checkpoints/my-model
+python scripts/train_regression.py --config configs/permeability_random.yaml model.pretrained_path=./checkpoints/my-model
 
 # Custom data
-python scripts/train_permeability.py --config configs/permeability_random.yaml data.train_file=./data/train.csv data.test_file=./data/test.csv
+python scripts/train_regression.py --config configs/permeability_random.yaml data.train_file=./data/train.csv data.test_file=./data/test.csv
 ```
 
-**Key configuration options** (`configs/permeability.yaml`):
+**Key configuration options** (`configs/regression.yaml`):
 
 | Config Key | Default | Description |
 |------------|---------|-------------|
@@ -214,6 +214,17 @@ Val 10% from train, 1:4 positive:negative ratio.
 - **aCSM**: clustering-based split on aCSM-ALL complex signatures with protein overlap pruning
 
 <p align="center"><img src="assets/tsne_ppi_splits.png" width="800"></p>
+
+### SST2 Binding Affinity (pChEMBL)
+
+| Split | Train | Test | R² | Pearson | RMSE | MAE |
+|:-----:|:-----:|:----:|:--:|:-------:|:----:|:---:|
+| Random | 267 | 30 | 0.312 | 0.600 | 0.742 | 0.499 |
+| Scaffold | 267 | 30 | 0.078 | 0.532 | 1.154 | 0.821 |
+
+Val 10% from train. Scaffold split by Murcko scaffolds.
+
+<p align="center"><img src="assets/tsne_sst2_splits.png" width="800"></p>
 
 ## Paper Checkpoint
 

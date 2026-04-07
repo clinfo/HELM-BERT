@@ -1,0 +1,15 @@
+# =============================================================================
+# SST2 Binding Affinity - Scaffold Split
+# =============================================================================
+# Usage: python scripts/train_regression.py --config configs/sst2_scaffold.yaml
+
+paths:
+  output_dir: ./outputs/sst2
+  results_dir: ./results/sst2
+
+data:
+  split_name: sst2_scaffold
+  train_file: ./data/downstream/sst2_scaffold_train.csv
+  test_file: ./data/downstream/sst2_scaffold_test.csv
+  helm_column: helm_notation
+  target_column: pchembl_value

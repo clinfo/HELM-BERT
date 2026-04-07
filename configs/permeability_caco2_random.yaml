@@ -1,7 +1,7 @@
 # =============================================================================
 # Permeability - Caco-2 only, Random Split
 # =============================================================================
-# Usage: python scripts/train_permeability.py --config configs/permeability_caco2_random.yaml
+# Usage: python scripts/train_regression.py --config configs/permeability_caco2_random.yaml
 
 training:
   max_epochs: 100
