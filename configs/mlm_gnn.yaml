@@ -1,0 +1,95 @@
+# =============================================================================
+# HELM-GNN MLM Training Configuration
+# =============================================================================
+# End-to-end GPS + Transformer with monomer-level MLM.
+
+# =============================================================================
+# Paths
+# =============================================================================
+paths:
+  output_dir: ./outputs/helmgnn_mlm
+  data_dir: ./data/mlm
+  hf_checkpoint_name: helmgnn-base
+
+# =============================================================================
+# Model
+# =============================================================================
+model:
+  use_emd: true
+  max_graph_distance: 32
+  monomer_library_path: ./data/monomer_library/helm_monomer_library.csv
+
+  architecture:
+    # GPS encoder
+    gps_hidden_dim: 256
+    gps_num_layers: 3
+    gps_num_heads: 8
+    gps_dropout: 0.1
+    # Transformer encoder
+    hidden_size: 768
+    num_hidden_layers: 6
+    num_attention_heads: 12
+    intermediate_size: 3072
+    max_position_embeddings: 512
+    hidden_dropout_prob: 0.1
+    attention_probs_dropout_prob: 0.1
+
+# =============================================================================
+# Training
+# =============================================================================
+training:
+  max_epochs: 100
+  batch_size: 64
+  learning_rate: 1.0e-4
+
+# =============================================================================
+# Data
+# =============================================================================
+data:
+  train_ratio: 0.9
+  max_seq_length: 128
+
+  datasets:
+    - name: chembl
+      file: chembl_deduplicated.csv
+      helm_column: helm_notation
+    - name: cycpeptmpdb
+      file: cycpeptmpdb_deduplicated.csv
+      helm_column: HELM
+    - name: propedia
+      file: propedia_deduplicated.csv
+      helm_column: Peptide_HELM
+    - name: cremp
+      file: cremp_deduplicated.csv
+      helm_column: helm
+
+  masking:
+    mlm_probability: 0.15
+    mask_ratio: 0.8
+    random_ratio: 0.1
+    keep_ratio: 0.1
+    min_span_length: 1
+    max_span_length: 3
+    geometric_p: 0.2
+
+# =============================================================================
+# MLM
+# =============================================================================
+mlm:
+  ignore_index: -100
+
+# =============================================================================
+# Hardware
+# =============================================================================
+hardware:
+  devices: [0]
+
+# =============================================================================
+# Checkpoint
+# =============================================================================
+checkpoint:
+  monitor: val_loss
+  mode: min
+  filename_pattern: "{epoch}-{val_loss:.4f}"
+  save_top_k: 10
+  save_last: true
