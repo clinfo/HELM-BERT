@@ -66,7 +66,8 @@ def main():
     )
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"regression_{config.data.split_name}_{get_model_tag(config)}_{timestamp}"
+    tag = f"_{config.logging.run_tag}" if config.logging.run_tag else ""
+    run_name = f"regression_{config.data.split_name}_{get_model_tag(config)}{tag}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     logger = setup_logging(output_dir, timestamp, "train_regression")
@@ -144,7 +145,7 @@ def main():
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
-        tags=build_tags(config, ["downstream", "regression", "evidential", config.data.split_name]),
+        tags=build_tags(config, ["downstream", "regression", "evidential", "permeability", config.data.split_name]),
     )
 
     trainer = L.Trainer(

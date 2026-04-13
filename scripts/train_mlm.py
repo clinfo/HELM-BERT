@@ -30,7 +30,7 @@ from scripts.training_utils import (
     config_to_display_config,
     create_callbacks,
     create_output_dirs,
-    load_best_checkpoint,
+
     load_config,
     log_completion,
     log_header,
@@ -107,6 +107,8 @@ def main():
         model_config.num_attention_heads = arch.num_attention_heads
         model_config.intermediate_size = arch.intermediate_size
         model_config.max_position_embeddings = arch.max_position_embeddings
+        model_config.hidden_dropout_prob = arch.hidden_dropout_prob
+        model_config.attention_probs_dropout_prob = arch.attention_probs_dropout_prob
 
     # Save configurations
     config_path_out = output_dir / "config.json"
@@ -203,12 +205,12 @@ def main():
 
     training_duration = time.time() - start_time
 
-    # Export the best validation checkpoint instead of the final step weights.
-    best_model_path = trainer.checkpoint_callback.best_model_path if trainer.checkpoint_callback else ""
-    if not best_model_path:
-        raise RuntimeError("No best checkpoint found after MLM training")
-    logger.info(f"Using best validation checkpoint: {best_model_path}")
-    export_model = load_best_checkpoint(trainer, HELMBertMLMLightning)
+    # Export the last checkpoint (WSD decay endpoint) instead of best val_loss.
+    last_ckpt = Path(checkpoint_dir) / "last.ckpt"
+    if not last_ckpt.exists():
+        raise RuntimeError("No last checkpoint found after MLM training")
+    logger.info(f"Using last checkpoint: {last_ckpt}")
+    export_model = HELMBertMLMLightning.load_from_checkpoint(str(last_ckpt), strict=True)
 
     # Save model in HuggingFace format
     hf_checkpoint_dir = Path(config.paths.checkpoint_dir) / config.paths.hf_checkpoint_name

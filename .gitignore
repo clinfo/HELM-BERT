@@ -210,6 +210,7 @@ uv.lock
 
 jobs/
 .python-version
+scripts/*.sh
 cache/
 scripts/data/
 /backups/
