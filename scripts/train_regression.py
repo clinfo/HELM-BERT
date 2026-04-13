@@ -3,7 +3,6 @@
 
 Usage:
     python scripts/train_regression.py --config configs/permeability_random.yaml
-    python scripts/train_regression.py --config configs/sst2_random.yaml
 """
 
 from __future__ import annotations
@@ -57,7 +56,6 @@ def main():
     if "--config" not in sys.argv:
         print("Error: --config is required.")
         print("  python scripts/train_regression.py --config configs/permeability_random.yaml")
-        print("  python scripts/train_regression.py --config configs/sst2_random.yaml")
         sys.exit(1)
     config = load_config(task="regression")
 

@@ -20,7 +20,7 @@ paths:
 # Model
 # =============================================================================
 model:
-  from_scratch: false
+  from_scratch: true
   use_emd: true  # Enhanced Mask Decoder (DeBERTa feature)
 
   # Architecture (only used when from_scratch: true)

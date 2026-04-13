@@ -30,6 +30,7 @@ from scripts.training_utils import (
     config_to_display_config,
     create_callbacks,
     create_output_dirs,
+    load_best_checkpoint,
     load_config,
     log_completion,
     log_header,
@@ -62,7 +63,7 @@ def main():
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     mode_str = "scratch" if config.model.from_scratch else "continue"
-    run_name = f"mlm_{mode_str}_{timestamp}"
+    run_name = f"mlm_{mode_str}_helmbert-base_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     # Setup logging
@@ -179,7 +180,7 @@ def main():
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
-        tags=["mlm", "pretrain", mode_str] + (config.logging.tags or []),
+        tags=["mlm", "pretrain", mode_str, "helmbert-base"] + (config.logging.tags or []),
     )
 
     # Create trainer
@@ -202,13 +203,17 @@ def main():
 
     training_duration = time.time() - start_time
 
-    # Use final model (WSD: stable phase explores, decay phase settles)
-    logger.info("Using final model after WSD decay phase")
+    # Export the best validation checkpoint instead of the final step weights.
+    best_model_path = trainer.checkpoint_callback.best_model_path if trainer.checkpoint_callback else ""
+    if not best_model_path:
+        raise RuntimeError("No best checkpoint found after MLM training")
+    logger.info(f"Using best validation checkpoint: {best_model_path}")
+    export_model = load_best_checkpoint(trainer, HELMBertMLMLightning)
 
     # Save model in HuggingFace format
     hf_checkpoint_dir = Path(config.paths.checkpoint_dir) / config.paths.hf_checkpoint_name
     hf_checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(hf_checkpoint_dir))
+    export_model.save_pretrained(str(hf_checkpoint_dir))
     tokenizer.save_pretrained(str(hf_checkpoint_dir))
     logger.info(f"Model saved in HuggingFace format to {hf_checkpoint_dir}")
 

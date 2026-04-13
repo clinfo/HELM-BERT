@@ -12,7 +12,9 @@ Negative generation strategy (same as original):
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import argparse
 import logging
@@ -24,11 +26,17 @@ import pandas as pd
 import lightning as L
 from sklearn.model_selection import train_test_split
 
+from scripts.preprocessing.preprocessing_utils.downstream_utils import log_mlm_coverage
+from scripts.preprocessing.preprocessing_utils.paths import (
+    INTERMEDIATE_PRODUCT_DIR,
+    PREPROCESSING_OUTPUT_DIR,
+    REPO_ROOT,
+)
+
 # Configuration
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SOURCE = REPO_ROOT / "local_data/intermediate_product/Propedia_v2_unique_ppi_HELM_SMILES.csv"
+DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "Propedia_v2_unique_ppi_HELM_SMILES.csv"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
-DEFAULT_LOG_DIR = REPO_ROOT / "outputs/preprocessing"
+DEFAULT_LOG_DIR = PREPROCESSING_OUTPUT_DIR
 
 SEED = 42
 TEST_RATIO = 0.2  # 8:2 split (20% test)
@@ -270,6 +278,9 @@ def main():
         neg = (data[LABEL_COL] == 0).sum()
         ratio = neg / pos if pos > 0 else 0
         logger.info(f"  {name}: {pos} pos, {neg} neg (1:{ratio:.1f})")
+
+    log_mlm_coverage(train_df, DRUG_COL, None, REPO_ROOT, logger, "propedia_ppi_random/train")
+    log_mlm_coverage(test_df, DRUG_COL, None, REPO_ROOT, logger, "propedia_ppi_random/test")
 
     # Save
     train_file = output_dir / "propedia_ppi_random_train.csv"

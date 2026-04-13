@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Visualize PPI train/val/test split distributions via t-SNE.
+"""Visualize Propedia PPI train/val/test split distributions via t-SNE.
 
 Uses aCSM complex signatures to show how splits are distributed.
 
@@ -15,9 +15,9 @@ Usage:
     python scripts/visualize_ppi_splits.py --legend
 
 Output:
-    results/visualization/tsne_ppi_splits_{timestamp}.pdf/.png        (combined)
-    results/visualization/tsne_ppi_{split}_acsm_{timestamp}.pdf/.png  (single)
-    results/visualization/tsne_ppi_legend_{timestamp}.pdf/.png        (legend)
+    results/visualization/tsne_propedia_ppi_splits_{timestamp}.pdf/.png        (combined)
+    results/visualization/tsne_propedia_ppi_{split}_acsm_{timestamp}.pdf/.png  (single)
+    results/visualization/tsne_propedia_ppi_legend_{timestamp}.pdf/.png        (legend)
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ def setup_logging(log_dir: Path) -> logging.Logger:
     """Set up logging to both console and file."""
     log_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = log_dir / f"visualize_ppi_splits_{timestamp}.log"
+    log_file = log_dir / f"visualize_propedia_ppi_splits_{timestamp}.log"
 
     lg = logging.getLogger(__name__)
     lg.setLevel(LOG_LEVEL)
@@ -238,7 +238,7 @@ def run_legend(results_dir: Path):
               handlelength=1.5, handletextpad=0.5, columnspacing=2.0)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_ppi_legend_{timestamp}")
+    _save(fig, results_dir / f"tsne_propedia_ppi_legend_{timestamp}")
 
 
 def run_single(config_path: str, results_dir: Path):
@@ -255,7 +255,7 @@ def run_single(config_path: str, results_dir: Path):
     fig.tight_layout()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_ppi_{split_name}_acsm_{timestamp}")
+    _save(fig, results_dir / f"tsne_propedia_ppi_{split_name}_acsm_{timestamp}")
 
 
 def run_combined(results_dir: Path):
@@ -320,12 +320,12 @@ def run_combined(results_dir: Path):
     fig.legend(handles=_legend_handles(), loc="lower center", ncol=3,
                fontsize=13, frameon=True, shadow=True, bbox_to_anchor=(0.5, -0.02),
                handlelength=2.5)
-    fig.suptitle("t-SNE of PPI Splits (aCSM Complex Signatures)",
+    fig.suptitle("t-SNE of Propedia PPI Splits (aCSM Complex Signatures)",
                  fontsize=16, fontweight="bold", y=1.02)
     fig.tight_layout()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_ppi_splits_{timestamp}")
+    _save(fig, results_dir / f"tsne_propedia_ppi_splits_{timestamp}")
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +336,7 @@ def main():
     global logger
 
     parser = argparse.ArgumentParser(
-        description="Visualize PPI train/val/test split distributions via t-SNE",
+        description="Visualize Propedia PPI train/val/test split distributions via t-SNE",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
@@ -359,11 +359,11 @@ def main():
 
     logger.info("=" * 60)
     if args.legend:
-        logger.info("PPI Split Visualization: legend only")
+        logger.info("Propedia PPI Split Visualization: legend only")
     elif args.config:
-        logger.info(f"PPI Split Visualization: single ({args.config})")
+        logger.info(f"Propedia PPI Split Visualization: single ({args.config})")
     else:
-        logger.info("PPI Split Visualization: combined (all splits)")
+        logger.info("Propedia PPI Split Visualization: combined (all splits)")
     logger.info("=" * 60)
     logger.info(f"Results: {results_dir}")
 

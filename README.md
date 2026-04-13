@@ -215,18 +215,6 @@ Val 10% from train, 1:4 positive:negative ratio.
 
 <p align="center"><img src="assets/tsne_ppi_splits.png" width="800"></p>
 
-### SST2 Binding Affinity (pChEMBL)
-
-| Split | Train | Test | R² | Pearson | RMSE | MAE |
-|:-----:|:-----:|:----:|:--:|:-------:|:----:|:---:|
-| Random | 267 | 30 | 0.312 | 0.600 | 0.742 | 0.499 |
-| Scaffold | 268 | 29 | 0.006 | 0.236 | 0.632 | 0.551 |
-
-Val 10% from train. Scaffold split by Murcko scaffolds.
-
-<p align="center"><img src="assets/tsne_sst2_splits.png" width="800"></p>
-
-
 ## Paper Checkpoint
 
 The original model from [arXiv:2512.23175](https://arxiv.org/abs/2512.23175) (pre-trained on 3 databases, without CREMP/WSD) is available via:

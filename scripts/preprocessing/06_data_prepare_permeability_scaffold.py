@@ -8,7 +8,9 @@ never appear in both train and test sets.
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import argparse
 import logging
@@ -19,10 +21,19 @@ import pandas as pd
 import lightning as L
 from src.utils import build_scaffold_groups, flatten_groups, greedy_scaffold_partition
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SOURCE = REPO_ROOT / "data/mlm/cycpeptmpdb_deduplicated.csv"
+from scripts.preprocessing.preprocessing_utils.downstream_utils import (
+    aggregate_median_by_canonical_smiles,
+    log_mlm_coverage,
+)
+from scripts.preprocessing.preprocessing_utils.paths import (
+    INTERMEDIATE_PRODUCT_DIR,
+    PREPROCESSING_OUTPUT_DIR,
+    REPO_ROOT,
+)
+
+DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "cycpeptmpdb_helm_normalized.csv"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
-DEFAULT_LOG_DIR = REPO_ROOT / "outputs/preprocessing"
+DEFAULT_LOG_DIR = PREPROCESSING_OUTPUT_DIR
 
 SEED = 42
 TEST_RATIO = 0.1
@@ -31,6 +42,7 @@ INVALID_THRESHOLD = -10
 SMILES_COL = "SMILES"
 HELM_COL = "HELM"
 ASSAY_COLS = ["PAMPA", "Caco2"]
+TARGET_COLS = ["Permeability"] + ASSAY_COLS
 
 LOG_LEVEL = logging.INFO
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -206,7 +218,7 @@ def main():
     logger.info(f"Test ratio: {args.test_ratio}")
 
     df = pd.read_csv(source_file, low_memory=False)
-    logger.info(f"Loaded {len(df)} samples")
+    logger.info(f"Loaded {len(df)} samples (HELM already normalized in 02_* stage)")
 
     required_cols = [SMILES_COL, HELM_COL] + ASSAY_COLS
     missing_cols = [c for c in required_cols if c not in df.columns]
@@ -231,6 +243,13 @@ def main():
     df_filtered = df_filtered.loc[has_perm].copy()
     logger.info(f"After invalid filtering: {len(df_filtered)} samples")
 
+    # Aggregate duplicate measurements per molecule using median assay values.
+    df_filtered = df_filtered.sort_values([HELM_COL, SMILES_COL]).reset_index(drop=True)
+    df_filtered = aggregate_median_by_canonical_smiles(
+        df_filtered, SMILES_COL, TARGET_COLS, logger
+    )
+    logger.info(f"After molecule aggregation: {len(df_filtered)} unique molecules")
+
     filtered_assay_frame = df_filtered.loc[:, ASSAY_COLS].copy()
     for col in ASSAY_COLS:
         logger.info(f"  {col}: {filtered_assay_frame.loc[:, col].notna().sum()} valid values")
@@ -242,6 +261,8 @@ def main():
 
     # Scaffold-based split (stratified by minority assay)
     train_df, test_df = scaffold_split(df_filtered, SMILES_COL, ASSAY_COLS, args.test_ratio)
+    log_mlm_coverage(train_df, HELM_COL, SMILES_COL, REPO_ROOT, logger, "permeability_scaffold/train")
+    log_mlm_coverage(test_df, HELM_COL, SMILES_COL, REPO_ROOT, logger, "permeability_scaffold/test")
 
     train_file = output_dir / "cycpeptmpdb_permeability_scaffold_train.csv"
     test_file = output_dir / "cycpeptmpdb_permeability_scaffold_test.csv"
@@ -252,6 +273,17 @@ def main():
     logger.info(f"\nSaved:")
     logger.info(f"  Train: {train_file} ({len(train_df)} samples)")
     logger.info(f"  Test: {test_file} ({len(test_df)} samples)")
+
+    # Save assay-specific subsets using the same scaffold split assignment.
+    for assay_name, stem in [("PAMPA", "pampa"), ("Caco2", "caco2")]:
+        assay_train = train_df[train_df[assay_name].notna()].copy()
+        assay_test = test_df[test_df[assay_name].notna()].copy()
+        assay_train_file = output_dir / f"cycpeptmpdb_permeability_{stem}_scaffold_train.csv"
+        assay_test_file = output_dir / f"cycpeptmpdb_permeability_{stem}_scaffold_test.csv"
+        assay_train.to_csv(assay_train_file, index=False)
+        assay_test.to_csv(assay_test_file, index=False)
+        logger.info(f"  {assay_name} train: {assay_train_file} ({len(assay_train)} samples)")
+        logger.info(f"  {assay_name} test: {assay_test_file} ({len(assay_test)} samples)")
 
     for col in ASSAY_COLS:
         logger.info(f"\n{col} statistics:")
