@@ -20,6 +20,7 @@ paths:
 model:
   freeze_encoder: false
   encoder_attribute_name: helmbert
+  pooler_type: mean
 
   # Classifier head
   classifier:

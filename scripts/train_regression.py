@@ -124,6 +124,7 @@ def main():
         total_steps=total_steps,
         warmup_ratio=config.training.warmup_ratio,
         decay_ratio=config.training.decay_ratio,
+        pooler_type=config.model.pooler_type,
     )
 
     model = HELMBertRegressionLightning(

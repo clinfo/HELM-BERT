@@ -145,8 +145,8 @@ class RegressionDataModule(L.LightningDataModule):
             collate_fn=self._collate_fn,
         )
 
-    def val_dataloader(self) -> DataLoader:
-        return DataLoader(
+    def val_dataloader(self):
+        val_dl = DataLoader(
             self.val_dataset,
             batch_size=self.config.batch_size,
             shuffle=False,
@@ -155,6 +155,18 @@ class RegressionDataModule(L.LightningDataModule):
             persistent_workers=self.config.num_workers > 0,
             collate_fn=self._collate_fn,
         )
+        if self.test_dataset is not None:
+            test_dl = DataLoader(
+                self.test_dataset,
+                batch_size=self.config.batch_size,
+                shuffle=False,
+                num_workers=self.config.num_workers,
+                pin_memory=self.config.pin_memory,
+                persistent_workers=self.config.num_workers > 0,
+                collate_fn=self._collate_fn,
+            )
+            return [val_dl, test_dl]
+        return val_dl
 
     def test_dataloader(self) -> Optional[DataLoader]:
         if self.test_dataset is None:
