@@ -16,11 +16,11 @@ class EmbeddingCache:
     """Simple cache for pre-computed embeddings with role-based organization.
 
     Cache structure:
-        embeddings/{encoder}/{dataset}/{role}/
+        local_data/embeddings/{encoder}/{dataset}/{role}/
 
     Example:
-        embeddings/helmbert/propedia_ppi_random/drugs/abc123.pt
-        embeddings/esm2/propedia_ppi_random/targets/def456.pt
+        local_data/embeddings/helmbert/propedia_ppi_random/drugs/abc123.pt
+        local_data/embeddings/esm2/propedia_ppi_random/targets/def456.pt
     """
 
     def __init__(self, cache_dir: Path):
@@ -57,10 +57,10 @@ class EmbeddingCache:
 
         Examples:
             >>> cache.get_cache_path('helmbert', 'propedia_ppi_random', role='drugs')
-            Path('embeddings/helmbert/propedia_ppi_random/drugs')
+            Path('local_data/embeddings/helmbert/propedia_ppi_random/drugs')
 
             >>> cache.get_cache_path('esm2', 'propedia_ppi_random', role='targets')
-            Path('embeddings/esm2/propedia_ppi_random/targets')
+            Path('local_data/embeddings/esm2/propedia_ppi_random/targets')
         """
         path = self.cache_dir / encoder_name
 

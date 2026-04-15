@@ -14,7 +14,7 @@
 paths:
   output_dir: ./outputs/ppi
   results_dir: ./results/ppi
-  cache_dir: ./data/embeddings
+  cache_dir: ./local_data/embeddings
 
 # =============================================================================
 # Model
