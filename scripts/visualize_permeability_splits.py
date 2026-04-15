@@ -4,12 +4,16 @@
 Uses Morgan fingerprints (ECFP4) from SMILES to embed molecules into 2D.
 
 Usage:
-    # Combined figure: Random + Scaffold side by side (default)
+    # Default: generate all task comparison figures in one shared space
     python scripts/visualize_permeability_splits.py
 
     # Single split only
     python scripts/visualize_permeability_splits.py --split random
     python scripts/visualize_permeability_splits.py --split scaffold
+
+    # Assay-specific visualization
+    python scripts/visualize_permeability_splits.py --task pampa
+    python scripts/visualize_permeability_splits.py --task caco2
 
     # Legend bar only
     python scripts/visualize_permeability_splits.py --legend
@@ -27,7 +31,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -54,20 +58,12 @@ JITTER_SCALE = 0.3
 
 SMILES_COL = "SMILES"
 
-ALL_SPLITS: List[Dict[str, str]] = [
-    {
-        "name": "Random Split",
-        "tag": "random",
-        "train_file": "data/downstream/cycpeptmpdb_permeability_random_train.csv",
-        "test_file": "data/downstream/cycpeptmpdb_permeability_random_test.csv",
-    },
-    {
-        "name": "Scaffold Split",
-        "tag": "scaffold",
-        "train_file": "data/downstream/cycpeptmpdb_permeability_scaffold_train.csv",
-        "test_file": "data/downstream/cycpeptmpdb_permeability_scaffold_test.csv",
-    },
-]
+TASK_FILE_STEMS = {
+    "permeability": "cycpeptmpdb_permeability",
+    "pampa": "cycpeptmpdb_permeability_pampa",
+    "caco2": "cycpeptmpdb_permeability_caco2",
+}
+ALL_TASKS = list(TASK_FILE_STEMS)
 
 sns.set_style("whitegrid")
 sns.set_context("paper", font_scale=1.5)
@@ -172,6 +168,44 @@ def get_split_data(split_info: Dict[str, str]) -> Tuple[np.ndarray, np.ndarray]:
     return Z, split_labels
 
 
+def get_task_splits(task: str) -> List[Dict[str, str]]:
+    """Return random/scaffold file paths for one task."""
+    stem = TASK_FILE_STEMS[task]
+    task_title = "Permeability" if task == "permeability" else task.upper()
+    return [
+        {
+            "name": f"{task_title} Random Split",
+            "tag": "random",
+            "train_file": f"data/downstream/{stem}_random_train.csv",
+            "test_file": f"data/downstream/{stem}_random_test.csv",
+        },
+        {
+            "name": f"{task_title} Scaffold Split",
+            "tag": "scaffold",
+            "train_file": f"data/downstream/{stem}_scaffold_train.csv",
+            "test_file": f"data/downstream/{stem}_scaffold_test.csv",
+        },
+    ]
+
+
+def build_shared_embedding_map(tasks: List[str]) -> Dict[str, np.ndarray]:
+    """Compute one shared t-SNE embedding over the union of all task molecules."""
+    all_smiles: set[str] = set()
+    for task in tasks:
+        for split_info in get_task_splits(task):
+            train_df = pd.read_csv(REPO_ROOT / split_info["train_file"])
+            test_df = pd.read_csv(REPO_ROOT / split_info["test_file"])
+            all_smiles.update(train_df[SMILES_COL])
+            all_smiles.update(test_df[SMILES_COL])
+
+    canonical_list = sorted(all_smiles)
+    logger.info(f"Computing shared t-SNE on {len(canonical_list)} unique molecules across {tasks}")
+    X, valid_idx = smiles_to_fingerprints(canonical_list)
+    Z = run_tsne(X)
+    valid_smiles = [canonical_list[i] for i in valid_idx]
+    return {smiles: Z[i] for i, smiles in enumerate(valid_smiles)}
+
+
 def _scatter_splits(ax, Z: np.ndarray, split_labels: np.ndarray, jitter: float = 0.0) -> None:
     """Draw split-colored scatter on an axis."""
     rng = np.random.RandomState(SEED)
@@ -229,8 +263,8 @@ def run_legend(results_dir: Path) -> None:
     _save(fig, results_dir / f"tsne_permeability_legend_{timestamp}")
 
 
-def run_single(split_tag: str, results_dir: Path, jitter: float) -> None:
-    split_info = next(split for split in ALL_SPLITS if split["tag"] == split_tag)
+def run_single(split_tag: str, task: str, results_dir: Path, jitter: float) -> None:
+    split_info = next(split for split in get_task_splits(task) if split["tag"] == split_tag)
     logger.info(f"Processing: {split_info['name']}")
 
     Z, split_labels = get_split_data(split_info)
@@ -241,26 +275,25 @@ def run_single(split_tag: str, results_dir: Path, jitter: float) -> None:
     fig.tight_layout()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_permeability_{split_tag}_{timestamp}")
+    _save(fig, results_dir / f"tsne_{task}_{split_tag}_{timestamp}")
 
 
-def run_combined(results_dir: Path, jitter: float) -> None:
-    all_smiles: set[str] = set()
+def run_combined(
+    task: str,
+    results_dir: Path,
+    jitter: float,
+    smiles_to_z: Optional[Dict[str, np.ndarray]] = None,
+    filename_suffix: str = "",
+) -> None:
+    task_splits = get_task_splits(task)
+    if smiles_to_z is None:
+        smiles_to_z = build_shared_embedding_map([task])
+
     split_dfs = []
-    for split_info in ALL_SPLITS:
+    for split_info in task_splits:
         train_df = pd.read_csv(REPO_ROOT / split_info["train_file"])
         test_df = pd.read_csv(REPO_ROOT / split_info["test_file"])
-        all_smiles.update(train_df[SMILES_COL])
-        all_smiles.update(test_df[SMILES_COL])
         split_dfs.append((split_info, train_df, test_df))
-
-    canonical_list = sorted(all_smiles)
-    logger.info(f"Computing shared t-SNE on {len(canonical_list)} unique molecules")
-    X, valid_idx = smiles_to_fingerprints(canonical_list)
-    Z = run_tsne(X)
-
-    valid_smiles = [canonical_list[i] for i in valid_idx]
-    smiles_to_z = {s: Z[i] for i, s in enumerate(valid_smiles)}
 
     panels = []
     for split_info, train_df, test_df in split_dfs:
@@ -300,7 +333,7 @@ def run_combined(results_dir: Path, jitter: float) -> None:
         handlelength=2.5,
     )
     fig.suptitle(
-        "t-SNE of Permeability Splits (Morgan Fingerprints)",
+        f"t-SNE of {'Permeability' if task == 'permeability' else task.upper()} Splits (Morgan Fingerprints)",
         fontsize=16,
         fontweight="bold",
         y=1.02,
@@ -308,7 +341,20 @@ def run_combined(results_dir: Path, jitter: float) -> None:
     fig.tight_layout()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_permeability_splits_{timestamp}")
+    _save(fig, results_dir / f"tsne_{task}_splits{filename_suffix}_{timestamp}")
+
+
+def run_all_tasks(results_dir: Path, jitter: float) -> None:
+    """Generate all task comparison figures in one shared global space."""
+    smiles_to_z = build_shared_embedding_map(ALL_TASKS)
+    for task in ALL_TASKS:
+        run_combined(
+            task,
+            results_dir,
+            jitter=jitter,
+            smiles_to_z=smiles_to_z,
+            filename_suffix="_shared",
+        )
 
 
 def main() -> None:
@@ -319,9 +365,10 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python scripts/visualize_permeability_splits.py                     # combined\n"
+            "  python scripts/visualize_permeability_splits.py                     # all tasks in shared space\n"
             "  python scripts/visualize_permeability_splits.py --split random      # single\n"
             "  python scripts/visualize_permeability_splits.py --split scaffold    # single\n"
+            "  python scripts/visualize_permeability_splits.py --task caco2        # assay-specific\n"
             "  python scripts/visualize_permeability_splits.py --legend            # legend only\n"
             "  python scripts/visualize_permeability_splits.py --jitter 0.5        # custom jitter\n"
         ),
@@ -334,6 +381,13 @@ def main() -> None:
         help="Single split to visualize. Omit for combined.",
     )
     parser.add_argument("--legend", action="store_true", help="Output legend bar only.")
+    parser.add_argument(
+        "--task",
+        type=str,
+        default="all",
+        choices=["all"] + sorted(TASK_FILE_STEMS),
+        help="Task to visualize.",
+    )
     parser.add_argument(
         "--jitter",
         type=float,
@@ -352,9 +406,11 @@ def main() -> None:
     if args.legend:
         logger.info("Permeability Split Visualization: legend only")
     elif args.split:
-        logger.info(f"Permeability Split Visualization: single ({args.split})")
+        logger.info(f"Permeability Split Visualization: single ({args.task}, {args.split})")
+    elif args.task == "all":
+        logger.info("Permeability Split Visualization: all tasks in shared space")
     else:
-        logger.info("Permeability Split Visualization: combined (all splits)")
+        logger.info(f"Permeability Split Visualization: combined ({args.task})")
     logger.info("=" * 60)
     logger.info(f"Results: {results_dir}")
     logger.info(f"Jitter: {args.jitter}")
@@ -362,9 +418,13 @@ def main() -> None:
     if args.legend:
         run_legend(results_dir)
     elif args.split:
-        run_single(args.split, results_dir, jitter=args.jitter)
+        if args.task == "all":
+            raise ValueError("--split requires a specific --task, not --task all")
+        run_single(args.split, args.task, results_dir, jitter=args.jitter)
+    elif args.task == "all":
+        run_all_tasks(results_dir, jitter=args.jitter)
     else:
-        run_combined(results_dir, jitter=args.jitter)
+        run_combined(args.task, results_dir, jitter=args.jitter)
 
     logger.info("Done!")
 

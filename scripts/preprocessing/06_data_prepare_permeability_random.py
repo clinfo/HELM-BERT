@@ -49,6 +49,62 @@ LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
 
 
+def _build_strat_key(df: pd.DataFrame) -> pd.Series:
+    """Build a non-target stratification key from assay availability."""
+    has_pampa = df["PAMPA"].notna()
+    has_caco2 = df["Caco2"].notna()
+    return has_pampa.astype(int).astype(str) + "_" + has_caco2.astype(int).astype(str)
+
+
+def _save_split_files(train_df: pd.DataFrame, test_df: pd.DataFrame, output_dir: Path, stem: str) -> None:
+    """Save one train/test pair and log where it was written."""
+    train_file = output_dir / f"{stem}_train.csv"
+    test_file = output_dir / f"{stem}_test.csv"
+    train_df.to_csv(train_file, index=False)
+    test_df.to_csv(test_file, index=False)
+    logger.info(f"  Train: {train_file} ({len(train_df)} samples)")
+    logger.info(f"  Test: {test_file} ({len(test_df)} samples)")
+
+
+def _log_task_statistics(task_name: str, target_col: str, train_df: pd.DataFrame, test_df: pd.DataFrame) -> None:
+    """Log basic target stats for one task-specific split."""
+    logger.info(f"\n{task_name} statistics:")
+    for split_name, df in [("Train", train_df), ("Test", test_df)]:
+        values = df[target_col].dropna()
+        logger.info(
+            f"  {split_name}: n={len(values)}, mean={values.mean():.3f}, std={values.std():.3f}"
+        )
+
+
+def _run_task_random_split(
+    df: pd.DataFrame,
+    task_name: str,
+    target_col: str,
+    stem: str,
+    output_dir: Path,
+    test_ratio: float,
+    seed: int,
+) -> None:
+    """Prepare one task-specific random split without deriving it from another task."""
+    task_df = df.loc[df[target_col].notna()].copy().reset_index(drop=True)
+    logger.info(f"\nPreparing {task_name} random split from {len(task_df)} rows")
+
+    strat_key = _build_strat_key(task_df)
+    logger.info(f"  Stratification groups: {strat_key.value_counts().to_dict()}")
+    train_df, test_df = train_test_split(
+        task_df,
+        test_size=test_ratio,
+        random_state=seed,
+        shuffle=True,
+        stratify=strat_key,
+    )
+
+    log_mlm_coverage(train_df, HELM_COL, SMILES_COL, REPO_ROOT, logger, f"{stem}/train")
+    log_mlm_coverage(test_df, HELM_COL, SMILES_COL, REPO_ROOT, logger, f"{stem}/test")
+    _save_split_files(train_df, test_df, output_dir, stem)
+    _log_task_statistics(task_name, target_col, train_df, test_df)
+
+
 def setup_logging(log_base: Path = DEFAULT_LOG_DIR) -> Tuple[logging.Logger, Path]:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_dir = log_base / f"permeability_random_preparation_{timestamp}"
@@ -146,53 +202,34 @@ def main():
     # Sort for deterministic split
     df_filtered = df_filtered.sort_values(by=[HELM_COL, SMILES_COL]).reset_index(drop=True)
 
-    # Build stratification key: preserve assay-type ratios across split
-    has_pampa = df_filtered["PAMPA"].notna()
-    has_caco2 = df_filtered["Caco2"].notna()
-    strat_key = has_pampa.astype(int).astype(str) + "_" + has_caco2.astype(int).astype(str)
-    logger.info(f"Stratification groups: {strat_key.value_counts().to_dict()}")
-
-    # Split train/test (stratified by assay availability)
-    train_df, test_df = train_test_split(
-        df_filtered,
-        test_size=args.test_ratio,
-        random_state=args.seed,
-        shuffle=True,
-        stratify=strat_key,
-    )
-
-    logger.info(f"\nSplit: {len(train_df)} train, {len(test_df)} test")
-    log_mlm_coverage(train_df, HELM_COL, SMILES_COL, REPO_ROOT, logger, "permeability_random/train")
-    log_mlm_coverage(test_df, HELM_COL, SMILES_COL, REPO_ROOT, logger, "permeability_random/test")
-
-    # Save mixed-task split
-    train_file = output_dir / "cycpeptmpdb_permeability_random_train.csv"
-    test_file = output_dir / "cycpeptmpdb_permeability_random_test.csv"
-
-    train_df.to_csv(train_file, index=False)
-    test_df.to_csv(test_file, index=False)
-
     logger.info(f"\nSaved:")
-    logger.info(f"  Train: {train_file} ({len(train_df)} samples)")
-    logger.info(f"  Test: {test_file} ({len(test_df)} samples)")
-
-    # Save assay-specific subsets using the same split assignment.
-    for assay_name, stem in [("PAMPA", "pampa"), ("Caco2", "caco2")]:
-        assay_train = train_df[train_df[assay_name].notna()].copy()
-        assay_test = test_df[test_df[assay_name].notna()].copy()
-        assay_train_file = output_dir / f"cycpeptmpdb_permeability_{stem}_random_train.csv"
-        assay_test_file = output_dir / f"cycpeptmpdb_permeability_{stem}_random_test.csv"
-        assay_train.to_csv(assay_train_file, index=False)
-        assay_test.to_csv(assay_test_file, index=False)
-        logger.info(f"  {assay_name} train: {assay_train_file} ({len(assay_train)} samples)")
-        logger.info(f"  {assay_name} test: {assay_test_file} ({len(assay_test)} samples)")
-
-    # Per-assay statistics
-    for col in ASSAY_COLS:
-        logger.info(f"\n{col} statistics:")
-        for name, data in [("Train", train_df), ("Test", test_df)]:
-            valid = data[col].dropna()
-            logger.info(f"  {name}: n={len(valid)}, mean={valid.mean():.3f}, std={valid.std():.3f}")
+    _run_task_random_split(
+        df_filtered,
+        "Permeability",
+        "Permeability",
+        "cycpeptmpdb_permeability_random",
+        output_dir,
+        args.test_ratio,
+        args.seed,
+    )
+    _run_task_random_split(
+        df_filtered,
+        "PAMPA",
+        "PAMPA",
+        "cycpeptmpdb_permeability_pampa_random",
+        output_dir,
+        args.test_ratio,
+        args.seed,
+    )
+    _run_task_random_split(
+        df_filtered,
+        "Caco2",
+        "Caco2",
+        "cycpeptmpdb_permeability_caco2_random",
+        output_dir,
+        args.test_ratio,
+        args.seed,
+    )
 
     logger.info("\n" + "=" * 60)
     logger.info("Done!")
