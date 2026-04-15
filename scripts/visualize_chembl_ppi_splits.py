@@ -27,17 +27,20 @@ from pathlib import Path
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 sys.path.append(str(Path(__file__).parent.parent))
 
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from rdkit import Chem
 from rdkit.Chem import AllChem
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+
+from visualization_utils import (
+    apply_plot_style,
+    legend_handles,
+    run_tsne,
+    save_figure,
+    scatter_splits,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS_DIR = REPO_ROOT / "results" / "visualization"
@@ -49,7 +52,6 @@ SEED = 42
 FP_BITS = 256
 PCA_COMPONENTS = 50
 VAL_RATIO = 0.1
-SPLIT_COLORS = {"train": "#4C72B0", "val": "#55A868", "test": "#DD8452"}
 
 DATASETS = {
     "random": {
@@ -183,59 +185,25 @@ def load_split_frames(split_name: str, val_ratio: float) -> tuple[pd.DataFrame, 
     return train_split.reset_index(drop=True), val_split.reset_index(drop=True), test_pos.reset_index(drop=True)
 
 
-def run_tsne(X: np.ndarray) -> np.ndarray:
-    X = StandardScaler().fit_transform(X)
-    if X.shape[1] > PCA_COMPONENTS:
-        pca = PCA(n_components=PCA_COMPONENTS, random_state=SEED)
-        X = pca.fit_transform(X)
-        logger.info(f"PCA: {PCA_COMPONENTS} dims, explained variance: {pca.explained_variance_ratio_.sum():.3f}")
-    logger.info(f"Running t-SNE on {X.shape}...")
-    return TSNE(n_components=2, random_state=SEED, perplexity=30, init="pca", learning_rate="auto").fit_transform(X)
-
-
-def _scatter(ax, Z: np.ndarray, split_labels: np.ndarray):
-    perm = np.random.RandomState(SEED).permutation(len(Z))
-    Z = Z[perm]
-    split_labels = split_labels[perm]
-    for split in ["train", "val", "test"]:
-        mask = split_labels == split
-        if mask.any():
-            ax.scatter(Z[mask, 0], Z[mask, 1], c=SPLIT_COLORS[split], alpha=0.45, s=16, edgecolors="none")
-    ax.set_xlabel("t-SNE 1", fontsize=12, fontweight="bold")
-    ax.set_ylabel("t-SNE 2", fontsize=12, fontweight="bold")
-
-
-def _save(fig, base: Path):
-    fig.savefig(f"{base}.pdf", format="pdf", bbox_inches="tight")
-    fig.savefig(f"{base}.png", format="png", bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Saved: {base}.pdf")
-    logger.info(f"Saved: {base}.png")
-
-
-def _legend_handles():
-    return [mpatches.Patch(color=SPLIT_COLORS[s], label=s) for s in ["train", "val", "test"]]
-
-
 def run_legend(results_dir: Path):
     fig, ax = plt.subplots(figsize=(10, 0.6))
     ax.axis("off")
-    ax.legend(handles=_legend_handles(), loc="center", ncol=3,
+    ax.legend(handles=legend_handles(), loc="center", ncol=3,
               fontsize=13, frameon=True, shadow=True,
               handlelength=1.5, handletextpad=0.5, columnspacing=2.0)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_chembl_ppi_legend_{timestamp}")
+    save_figure(fig, results_dir / f"tsne_chembl_ppi_legend_{timestamp}", logger)
 
 
 def run_single(split_name: str, results_dir: Path):
     X, labels = load_split_dataset(split_name, VAL_RATIO)
-    Z = run_tsne(X)
+    Z = run_tsne(X, logger, seed=SEED, pca_components=PCA_COMPONENTS)
     fig, ax = plt.subplots(figsize=(10, 10))
-    _scatter(ax, Z, labels)
+    scatter_splits(ax, Z, labels, seed=SEED)
     ax.set_title(DATASETS[split_name]["title"], fontsize=15, fontweight="bold")
     fig.tight_layout()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_chembl_ppi_{split_name}_{timestamp}")
+    save_figure(fig, results_dir / f"tsne_chembl_ppi_{split_name}_{timestamp}", logger)
 
 
 def run_comparison(split_names: list[str], title: str, output_stem: str, results_dir: Path):
@@ -263,7 +231,7 @@ def run_comparison(split_names: list[str], title: str, output_stem: str, results
 
     logger.info(f"Computing shared t-SNE on {len(valid_keys):,} unique positive pairs")
     X = np.vstack(features)
-    Z = run_tsne(X)
+    Z = run_tsne(X, logger, seed=SEED, pca_components=PCA_COMPONENTS)
     pair_to_z = {key: Z[i] for i, key in enumerate(valid_keys)}
 
     panels = []
@@ -286,16 +254,16 @@ def run_comparison(split_names: list[str], title: str, output_stem: str, results
         axes = [axes]
 
     for ax, (split_name, Z, labels) in zip(axes, panels):
-        _scatter(ax, Z, labels)
+        scatter_splits(ax, Z, labels, seed=SEED)
         ax.set_title(DATASETS[split_name]["title"], fontsize=15, fontweight="bold")
 
-    fig.legend(handles=_legend_handles(), loc="lower center", ncol=3,
+    fig.legend(handles=legend_handles(), loc="lower center", ncol=3,
                fontsize=13, frameon=True, shadow=True, bbox_to_anchor=(0.5, -0.02),
                handlelength=2.5)
     fig.suptitle(title, fontsize=16, fontweight="bold", y=1.02)
     fig.tight_layout()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"{output_stem}_{timestamp}")
+    save_figure(fig, results_dir / f"{output_stem}_{timestamp}", logger)
 
 
 def run_all_comparisons(comparison_keys: list[str], results_dir: Path):
@@ -325,7 +293,7 @@ def run_all_comparisons(comparison_keys: list[str], results_dir: Path):
 
     logger.info(f"Computing shared t-SNE on {len(valid_keys):,} unique positive pairs")
     X = np.vstack(features)
-    Z = run_tsne(X)
+    Z = run_tsne(X, logger, seed=SEED, pca_components=PCA_COMPONENTS)
     pair_to_z = {key: Z[i] for i, key in enumerate(valid_keys)}
 
     for key in comparison_keys:
@@ -352,27 +320,27 @@ def run_all_comparisons(comparison_keys: list[str], results_dir: Path):
         if len(panels) == 1:
             axes = [axes]
         for ax, (split_name, Z_panel, labels) in zip(axes, panels):
-            _scatter(ax, Z_panel, labels)
+            scatter_splits(ax, Z_panel, labels, seed=SEED)
             ax.set_title(DATASETS[split_name]["title"], fontsize=15, fontweight="bold")
-        fig.legend(handles=_legend_handles(), loc="lower center", ncol=3,
+        fig.legend(handles=legend_handles(), loc="lower center", ncol=3,
                    fontsize=13, frameon=True, shadow=True, bbox_to_anchor=(0.5, -0.02),
                    handlelength=2.5)
         fig.suptitle(spec["title"], fontsize=16, fontweight="bold", y=1.02)
         fig.tight_layout()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        _save(fig, results_dir / f"{spec['stem']}_{timestamp}")
+        save_figure(fig, results_dir / f"{spec['stem']}_{timestamp}", logger)
 
 
 COMPARISONS = {
     "random_vs_family": {
         "splits": ["random", "family"],
-        "title": "t-SNE of ChEMBL PPI Splits: Random vs Family",
-        "stem": "tsne_chembl_ppi_random_vs_family",
+        "title": "t-SNE of ChEMBL PPI Mix: Random vs Family",
+        "stem": "tsne_chembl_ppi_mix_random_family",
     },
     "random_vs_cold": {
         "splits": ["random", "cold"],
-        "title": "t-SNE of ChEMBL PPI Splits: Random vs Cold",
-        "stem": "tsne_chembl_ppi_random_vs_cold",
+        "title": "t-SNE of ChEMBL PPI Mix: Random vs Cold",
+        "stem": "tsne_chembl_ppi_mix_random_cold",
     },
 }
 
@@ -380,12 +348,7 @@ COMPARISONS = {
 def main():
     global logger
 
-    sns.set_style("whitegrid")
-    sns.set_context("paper", font_scale=1.4)
-    plt.rcParams["figure.dpi"] = 300
-    plt.rcParams["savefig.dpi"] = 300
-    plt.rcParams["font.family"] = "sans-serif"
-    plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
+    apply_plot_style(font_scale=1.4)
 
     parser = argparse.ArgumentParser(description="Visualize ChEMBL PPI split distributions via t-SNE")
     parser.add_argument("--split", choices=["random", "family", "cold"], default=None,
@@ -426,7 +389,14 @@ def main():
             results_dir=results_dir,
         )
     else:
-        run_all_comparisons(targets, results_dir)
+        for key in targets:
+            spec = COMPARISONS[key]
+            run_comparison(
+                split_names=spec["splits"],
+                title=spec["title"],
+                output_stem=spec["stem"],
+                results_dir=results_dir,
+            )
 
     logger.info("Done!")
 

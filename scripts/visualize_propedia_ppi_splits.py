@@ -15,7 +15,7 @@ Usage:
     python scripts/visualize_ppi_splits.py --legend
 
 Output:
-    results/visualization/tsne_propedia_ppi_splits_{timestamp}.pdf/.png        (combined)
+    results/visualization/tsne_propedia_ppi_mix_random_acsm_{timestamp}.pdf/.png (combined)
     results/visualization/tsne_propedia_ppi_{split}_acsm_{timestamp}.pdf/.png  (single)
     results/visualization/tsne_propedia_ppi_legend_{timestamp}.pdf/.png        (legend)
 """
@@ -34,16 +34,19 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 import argparse
 
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from omegaconf import OmegaConf
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+
+from visualization_utils import (
+    apply_plot_style,
+    legend_handles,
+    run_tsne,
+    save_figure,
+    scatter_splits,
+)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -67,15 +70,7 @@ ALL_CONFIGS = [
     ("configs/ppi_acsm.yaml", "aCSM Split"),
 ]
 
-# Plot style
-sns.set_style("whitegrid")
-sns.set_context("paper", font_scale=1.5)
-plt.rcParams["figure.dpi"] = 300
-plt.rcParams["savefig.dpi"] = 300
-plt.rcParams["font.family"] = "sans-serif"
-plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
-
-SPLIT_COLORS = {"train": "#4C72B0", "val": "#55A868", "test": "#DD8452"}
+apply_plot_style(font_scale=1.5)
 
 LOG_LEVEL = logging.INFO
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -154,17 +149,6 @@ def load_acsm_signatures(
     return np.array(sigs, dtype=np.float32), np.array(valid_idx)
 
 
-def run_tsne(X: np.ndarray) -> np.ndarray:
-    """StandardScaler -> PCA(50) -> t-SNE(2)."""
-    X = StandardScaler().fit_transform(X)
-    if X.shape[1] > PCA_COMPONENTS:
-        pca = PCA(n_components=PCA_COMPONENTS, random_state=SEED)
-        X = pca.fit_transform(X)
-        logger.info(f"PCA: {PCA_COMPONENTS} dims, explained variance: {pca.explained_variance_ratio_.sum():.3f}")
-    logger.info(f"Running t-SNE on {X.shape}...")
-    return TSNE(n_components=2, random_state=SEED, perplexity=30, init="pca", learning_rate="auto").fit_transform(X)
-
-
 def get_split_data(config: OmegaConf) -> Tuple[np.ndarray, np.ndarray]:
     """Load data, get aCSM signatures, run t-SNE for one config."""
     drug_col = config.data.drug_column
@@ -190,40 +174,13 @@ def get_split_data(config: OmegaConf) -> Tuple[np.ndarray, np.ndarray]:
     split_labels = split_labels[valid_idx]
 
     logger.info(f"  Embeddings: {X.shape}")
-    Z = run_tsne(X)
+    Z = run_tsne(X, logger, seed=SEED, pca_components=PCA_COMPONENTS)
     return Z, split_labels
 
 
 # ---------------------------------------------------------------------------
 # Plot helpers
 # ---------------------------------------------------------------------------
-
-def _scatter_splits(ax, Z, split_labels):
-    """Draw split-colored scatter on an axis."""
-    perm = np.random.RandomState(SEED).permutation(len(Z))
-    Z = Z[perm]
-    split_labels = split_labels[perm]
-    for split in ["train", "val", "test"]:
-        mask = split_labels == split
-        if mask.any():
-            ax.scatter(Z[mask, 0], Z[mask, 1], c=SPLIT_COLORS[split],
-                       alpha=0.4, s=15, edgecolors="none")
-    ax.set_xlabel("t-SNE 1", fontsize=13, fontweight="bold")
-    ax.set_ylabel("t-SNE 2", fontsize=13, fontweight="bold")
-
-
-def _save(fig, base: Path):
-    """Save figure as PDF + PNG."""
-    fig.savefig(f"{base}.pdf", format="pdf", bbox_inches="tight")
-    fig.savefig(f"{base}.png", format="png", bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Saved: {base}.pdf")
-    logger.info(f"Saved: {base}.png")
-
-
-def _legend_handles():
-    return [mpatches.Patch(color=SPLIT_COLORS[s], label=s) for s in ["train", "val", "test"]]
-
 
 # ---------------------------------------------------------------------------
 # Modes
@@ -233,12 +190,12 @@ def run_legend(results_dir: Path):
     """Generate legend bar only."""
     fig, ax = plt.subplots(figsize=(10, 0.6))
     ax.axis("off")
-    ax.legend(handles=_legend_handles(), loc="center", ncol=3,
+    ax.legend(handles=legend_handles(), loc="center", ncol=3,
               fontsize=13, frameon=True, shadow=True,
               handlelength=1.5, handletextpad=0.5, columnspacing=2.0)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_propedia_ppi_legend_{timestamp}")
+    save_figure(fig, results_dir / f"tsne_propedia_ppi_legend_{timestamp}", logger)
 
 
 def run_single(config_path: str, results_dir: Path):
@@ -250,12 +207,12 @@ def run_single(config_path: str, results_dir: Path):
     Z, split_labels = get_split_data(config)
 
     fig, ax = plt.subplots(figsize=(10, 10))
-    _scatter_splits(ax, Z, split_labels)
+    scatter_splits(ax, Z, split_labels, seed=SEED)
     ax.set_title(f"{split_name.upper()} Split", fontsize=15, fontweight="bold")
     fig.tight_layout()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_propedia_ppi_{split_name}_acsm_{timestamp}")
+    save_figure(fig, results_dir / f"tsne_propedia_ppi_{split_name}_acsm_{timestamp}", logger)
 
 
 def run_combined(results_dir: Path):
@@ -285,7 +242,7 @@ def run_combined(results_dir: Path):
 
     logger.info(f"Computing shared t-SNE on {len(merged)} unique positive pairs")
     X, valid_idx = load_acsm_signatures(merged, drug_col, target_col)
-    Z = run_tsne(X)
+    Z = run_tsne(X, logger, seed=SEED, pca_components=PCA_COMPONENTS)
 
     valid_pairs = [
         (merged.iloc[i][drug_col], merged.iloc[i][target_col])
@@ -314,18 +271,18 @@ def run_combined(results_dir: Path):
         axes = [axes]
 
     for ax, (Z_panel, split_labels, subtitle) in zip(axes, panels):
-        _scatter_splits(ax, Z_panel, split_labels)
+        scatter_splits(ax, Z_panel, split_labels, seed=SEED)
         ax.set_title(subtitle, fontsize=15, fontweight="bold")
 
-    fig.legend(handles=_legend_handles(), loc="lower center", ncol=3,
+    fig.legend(handles=legend_handles(), loc="lower center", ncol=3,
                fontsize=13, frameon=True, shadow=True, bbox_to_anchor=(0.5, -0.02),
                handlelength=2.5)
-    fig.suptitle("t-SNE of Propedia PPI Splits (aCSM Complex Signatures)",
+    fig.suptitle("t-SNE of Propedia PPI Mix: Random vs aCSM",
                  fontsize=16, fontweight="bold", y=1.02)
     fig.tight_layout()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _save(fig, results_dir / f"tsne_propedia_ppi_splits_{timestamp}")
+    save_figure(fig, results_dir / f"tsne_propedia_ppi_mix_random_acsm_{timestamp}", logger)
 
 
 # ---------------------------------------------------------------------------
