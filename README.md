@@ -185,35 +185,49 @@ All downstream tasks use Evidential Deep Learning ([Soleimany et al. 2021](https
 
 The `evidence.lambda_coeff` controls the regularization strength between task loss and evidence penalty.
 
-## Performance
+## Benchmarks
 
-### Permeability Regression (CycPeptMPDB)
+Metrics are intentionally omitted here (`-`). Train/test counts below reflect the current released split files.
 
-| Split | Target | Train | Test | R² | Pearson | RMSE | MAE |
-|:-----:|:------:|:-----:|:----:|:--:|:-------:|:----:|:---:|
-| Random | Mixed | 6,944 | 772 | 0.769 | 0.878 | 0.388 | 0.269 |
-| Random | PAMPA | 6,103 | 679 | 0.765 | 0.875 | 0.384 | 0.275 |
-| Random | Caco-2 | 971 | 108 | 0.758 | 0.876 | 0.414 | 0.303 |
-| Scaffold | Mixed | 6,944 | 772 | 0.643 | 0.812 | 0.380 | 0.284 |
-| Scaffold | PAMPA | 6,104 | 678 | 0.627 | 0.810 | 0.372 | 0.281 |
-| Scaffold | Caco-2 | 958 | 121 | 0.698 | 0.849 | 0.383 | 0.287 |
+### CycPeptMPDB Permeability
 
-Val 10% from train. Scaffold split by Murcko scaffolds.
+| Split Regime | Target | Train | Test | R² | Pearson | RMSE | MAE |
+|:------------:|:------:|:-----:|:----:|:--:|:-------:|:----:|:---:|
+| Random | Mixed | 6,945 | 772 | - | - | - | - |
+| Random | PAMPA | 6,262 | 696 | - | - | - | - |
+| Random | Caco-2 | 1,126 | 126 | - | - | - | - |
+| Scaffold | Mixed | 6,945 | 772 | - | - | - | - |
+| Scaffold | PAMPA | 6,262 | 696 | - | - | - | - |
+| Scaffold | Caco-2 | 1,127 | 125 | - | - | - | - |
 
-<p align="center"><img src="assets/tsne_permeability_splits.png" width="800"></p>
+Val 10% from train. Scaffold split by Murcko scaffolds. The figure below shows the representative Mixed random-vs-scaffold view; PAMPA and Caco-2 use the same split regimes and are summarized in the table above.
 
-### PPI Classification (Propedia v2)
+<p align="center"><img src="assets/tsne_cycpeptmpdb_permeability_mix_random_scaffold.png" width="800"></p>
 
-| Split | Train | Test | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
-|:-----:|:-----:|:----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 80,225 | 20,060 | 0.972 | 0.912 | 0.859 | 0.824 | 0.911 |
-| aCSM | 80,415 | 18,805 | 0.868 | 0.702 | 0.613 | 0.559 | 0.735 |
+### Propedia v2 PPI
+
+| Split Regime | Train | Test | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
+|:------------:|:-----:|:----:|:-------:|:------:|:--:|:---:|:------------:|
+| Random | 80,225 | 20,060 | - | - | - | - | - |
+| aCSM | 90,215 | 9,575 | - | - | - | - | - |
 
 Val 10% from train, 1:4 positive:negative ratio.
 - **Random**: random split
 - **aCSM**: clustering-based split on aCSM-ALL complex signatures with protein overlap pruning
 
-<p align="center"><img src="assets/tsne_ppi_splits.png" width="800"></p>
+<p align="center"><img src="assets/tsne_propedia_ppi_random_acsm.png" width="800"></p>
+
+### ChEMBL PPI
+
+| Split Regime | Train | Test | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
+|:------------:|:-----:|:----:|:-------:|:------:|:--:|:---:|:------------:|
+| Random | 46,650 | 5,180 | - | - | - | - | - |
+| Family | 41,465 | 10,365 | - | - | - | - | - |
+| Cold | 41,465 | 10,365 | - | - | - | - | - |
+
+Val 10% from train. The figure below shows the representative Random-vs-Family comparison; the Cold split is summarized in the table above.
+
+<p align="center"><img src="assets/tsne_chembl_ppi_random_family.png" width="800"></p>
 
 ## Paper Checkpoint
 
