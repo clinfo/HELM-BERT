@@ -28,8 +28,8 @@ import lightning as L
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.preprocessing.preprocessing_utils.downstream_utils import log_mlm_coverage
-from scripts.preprocessing.preprocessing_utils.paths import (
+from scripts.preprocessing.helpers.downstream import log_mlm_coverage
+from scripts.preprocessing.helpers.paths import (
     INTERMEDIATE_PRODUCT_DIR,
     PREPROCESSING_OUTPUT_DIR,
     REPO_ROOT,

@@ -24,7 +24,7 @@ from lightning.pytorch.callbacks import (
 from omegaconf import DictConfig, OmegaConf
 
 # Config directory
-CONFIG_DIR = Path(__file__).parent.parent / "configs"
+CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
 
 # Constants
 SEPARATOR_LINE = "=" * 60

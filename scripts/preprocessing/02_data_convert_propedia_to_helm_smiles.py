@@ -13,11 +13,11 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from datetime import datetime
-from scripts.preprocessing.preprocessing_utils.helm_utils import (
+from scripts.preprocessing.helpers.helm import (
     load_monomer_library,
     validate_helm_monomers,
 )
-from scripts.preprocessing.preprocessing_utils.paths import (
+from scripts.preprocessing.helpers.paths import (
     INTERMEDIATE_PRODUCT_DIR,
     MONOMER_LIBRARY_PATH,
     PREPROCESSING_OUTPUT_DIR,

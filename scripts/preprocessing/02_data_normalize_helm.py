@@ -21,11 +21,11 @@ from typing import Any, Tuple, cast
 
 import pandas as pd
 
-from scripts.preprocessing.preprocessing_utils.helm_utils import (
+from scripts.preprocessing.helpers.helm import (
     apply_helm_normalization,
     load_monomer_library,
 )
-from scripts.preprocessing.preprocessing_utils.paths import (
+from scripts.preprocessing.helpers.paths import (
     MONOMER_LIBRARY_PATH,
     PREPROCESSING_OUTPUT_DIR,
     RAW_DATA_DIR,

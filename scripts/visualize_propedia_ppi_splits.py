@@ -40,7 +40,7 @@ import pandas as pd
 from omegaconf import OmegaConf
 from sklearn.model_selection import train_test_split
 
-from visualization_utils import (
+from scripts.helpers.visualization import (
     apply_plot_style,
     legend_handles,
     run_tsne,

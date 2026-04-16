@@ -27,7 +27,7 @@ from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf
 from transformers import AutoTokenizer
 
-from scripts.training_utils import (
+from scripts.helpers.training import (
     SEPARATOR_LINE,
     config_to_checkpoint_config,
     config_to_display_config,

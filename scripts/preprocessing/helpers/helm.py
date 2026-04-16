@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from scripts.preprocessing.preprocessing_utils.paths import MONOMER_LIBRARY_PATH
+from scripts.preprocessing.helpers.paths import MONOMER_LIBRARY_PATH
 
 logger = logging.getLogger(__name__)
 DEFAULT_MONOMER_LIBRARY = MONOMER_LIBRARY_PATH

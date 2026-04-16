@@ -38,8 +38,8 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-from scripts.preprocessing.preprocessing_utils.downstream_utils import log_mlm_coverage
-from scripts.preprocessing.preprocessing_utils.paths import (
+from scripts.preprocessing.helpers.downstream import log_mlm_coverage
+from scripts.preprocessing.helpers.paths import (
     INTERMEDIATE_PRODUCT_DIR,
     PREPROCESSING_OUTPUT_DIR,
     REPO_ROOT,

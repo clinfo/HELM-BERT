@@ -26,8 +26,8 @@ import pandas as pd
 import lightning as L
 from sklearn.model_selection import train_test_split
 
-from scripts.preprocessing.preprocessing_utils.downstream_utils import log_mlm_coverage
-from scripts.preprocessing.preprocessing_utils.paths import (
+from scripts.preprocessing.helpers.downstream import log_mlm_coverage
+from scripts.preprocessing.helpers.paths import (
     INTERMEDIATE_PRODUCT_DIR,
     PREPROCESSING_OUTPUT_DIR,
     REPO_ROOT,

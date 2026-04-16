@@ -24,7 +24,7 @@ import lightning as L
 from lightning.pytorch.loggers import WandbLogger
 from transformers import AutoConfig, AutoTokenizer
 
-from scripts.training_utils import (
+from scripts.helpers.training import (
     SEPARATOR_LINE,
     config_to_checkpoint_config,
     config_to_display_config,
@@ -41,6 +41,7 @@ from scripts.training_utils import (
     setup_training_env,
     to_dict,
 )
+from scripts.helpers.mlm_checkpoint import export_checkpoint
 from src.datamodules import MLMDataModule, MLMDataConfig
 from src.datamodules.mlm_datamodule import DatasetInfo
 from src.models.mlm_lightning import HELMBertMLMLightning, MLMTrainingConfig
@@ -205,19 +206,16 @@ def main():
 
     training_duration = time.time() - start_time
 
-    # Export the last checkpoint (WSD decay endpoint) instead of best val_loss.
-    last_ckpt = Path(checkpoint_dir) / "last.ckpt"
-    if not last_ckpt.exists():
-        raise RuntimeError("No last checkpoint found after MLM training")
-    logger.info(f"Using last checkpoint: {last_ckpt}")
-    export_model = HELMBertMLMLightning.load_from_checkpoint(str(last_ckpt), strict=True)
+    checkpoint_callback = trainer.checkpoint_callback
+    best_model_path = getattr(checkpoint_callback, "best_model_path", "")
+    if checkpoint_callback is None or not best_model_path:
+        raise RuntimeError("No best checkpoint found after MLM training")
 
-    # Save model in HuggingFace format
+    best_ckpt = Path(best_model_path)
+    if not best_ckpt.exists():
+        raise RuntimeError("Best checkpoint path does not exist after MLM training")
     hf_checkpoint_dir = Path(config.paths.checkpoint_dir) / config.paths.hf_checkpoint_name
-    hf_checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    export_model.save_pretrained(str(hf_checkpoint_dir))
-    tokenizer.save_pretrained(str(hf_checkpoint_dir))
-    logger.info(f"Model saved in HuggingFace format to {hf_checkpoint_dir}")
+    export_checkpoint(best_ckpt, hf_checkpoint_dir, tokenizer, logger)
 
     # Log summary and complete
     log_summary(logger, training_duration, output_dir, huggingface_checkpoint=hf_checkpoint_dir)

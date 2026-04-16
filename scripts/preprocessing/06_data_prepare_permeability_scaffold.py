@@ -26,11 +26,11 @@ from rdkit.Chem import rdFingerprintGenerator
 
 from src.utils import flatten_groups, generate_scaffold, greedy_scaffold_partition
 
-from scripts.preprocessing.preprocessing_utils.downstream_utils import (
+from scripts.preprocessing.helpers.downstream import (
     aggregate_median_by_canonical_smiles,
     log_mlm_coverage,
 )
-from scripts.preprocessing.preprocessing_utils.paths import (
+from scripts.preprocessing.helpers.paths import (
     INTERMEDIATE_PRODUCT_DIR,
     PREPROCESSING_OUTPUT_DIR,
     REPO_ROOT,

@@ -33,6 +33,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+sys.path.append(str(Path(__file__).parent.parent))
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -40,7 +42,7 @@ from rdkit import Chem
 from rdkit.Chem import rdFingerprintGenerator
 from sklearn.model_selection import train_test_split
 
-from visualization_utils import (
+from scripts.helpers.visualization import (
     apply_plot_style,
     legend_handles,
     run_tsne,
