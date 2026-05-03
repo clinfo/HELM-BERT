@@ -73,6 +73,45 @@ def normalize_single_chain_helm(helm: str) -> str:
     return str(helm).replace(chain_id, "PEPTIDE1")
 
 
+_CONNECTION_TOKEN_RE = re.compile(
+    r"([A-Z]+)(\d+),([A-Z]+)(\d+),(\d+):R(\d+)-(\d+):R(\d+)"
+)
+
+
+def canonicalize_connections(helm: str) -> str:
+    """Canonicalize connection orientation in HELM `$...$` section.
+
+    For each `chainA,chainB,posA:Rx-posB:Ry` token, swap source and target
+    so the (chain_type, chain_idx, residue_pos, R_idx) tuple on the left is
+    the smaller one. Resolves convention differences such as ChEMBL's
+    `N:R2-1:R1` vs CycPeptMPDB's `1:R1-N:R2` for the same H2T-cyclic
+    molecule, and generalizes to any R pair (R1-R3 lariat, R3-R3 disulfide)
+    and any HELM polymer type (PEPTIDE, RNA, CHEM, BLOB, ...).
+
+    Tokens that don't match the standard `<TYPE><n>,<TYPE><n>,p:Rx-p:Ry`
+    form (e.g. wildcard positions `?:R1-3:R2`, ambiguous bond syntax with
+    `+`/`,`) are left untouched — the function never produces an invalid
+    HELM string from valid input.
+    """
+    if not helm or pd.isna(helm):
+        return helm
+    s = str(helm)
+    parts = s.split("$")
+    if len(parts) < 2 or not parts[1].strip():
+        return s
+
+    def _canon(m: re.Match) -> str:
+        type_a, idx_a, type_b, idx_b, pos_a, r_a, pos_b, r_b = m.groups()
+        key_a = (type_a, int(idx_a), int(pos_a), int(r_a))
+        key_b = (type_b, int(idx_b), int(pos_b), int(r_b))
+        if key_a > key_b:
+            return f"{type_b}{idx_b},{type_a}{idx_a},{pos_b}:R{r_b}-{pos_a}:R{r_a}"
+        return m.group(0)
+
+    parts[1] = _CONNECTION_TOKEN_RE.sub(_canon, parts[1])
+    return "$".join(parts)
+
+
 def remap_helm(helm: str, alt_to_canonical: dict) -> str:
     """Remap alt_symbols in HELM notation to canonical symbols."""
     if not alt_to_canonical:
@@ -124,6 +163,7 @@ def apply_helm_normalization(
 
     renumbered_count = 0
     remapped_count = 0
+    connection_swapped_count = 0
     new_helms = []
     for h in df[helm_col]:
         normalized = normalize_single_chain_helm(str(h))
@@ -132,7 +172,10 @@ def apply_helm_normalization(
         remapped = remap_helm(normalized, alt_to_canonical)
         if remapped != normalized:
             remapped_count += 1
-        new_helms.append(remapped)
+        canonicalized = canonicalize_connections(remapped)
+        if canonicalized != remapped:
+            connection_swapped_count += 1
+        new_helms.append(canonicalized)
     df[helm_col] = new_helms
 
     valid_mask = df[helm_col].map(lambda h: validate_helm_monomers(h, valid_symbols))
@@ -144,6 +187,7 @@ def apply_helm_normalization(
         "null_removed": null_removed,
         "renumbered": renumbered_count,
         "remapped": remapped_count,
+        "connection_swapped": connection_swapped_count,
         "invalid_removed": invalid_count,
         "after_mapping": len(df),
     }
@@ -151,7 +195,8 @@ def apply_helm_normalization(
     _log.info(
         f"  HELM mapping: {original_size} -> {len(df)} "
         f"(null: -{null_removed}, renumber: {renumbered_count}, "
-        f"remap: {remapped_count}, invalid: -{invalid_count})"
+        f"remap: {remapped_count}, conn_swap: {connection_swapped_count}, "
+        f"invalid: -{invalid_count})"
     )
 
     return df, stats
