@@ -3097,3 +3097,8 @@ dSer(Me),O-methyl-D-serine,S,COC[C@@H](N[*])C([*])=O |$;;;;;_R1;;_R2;$|,Backbone
 iBu_Gly,N-isobutyl-glycine,G,CC(C)CN([*])CC([*])=O |$;;;;;_R1;;;_R2;$|,Backbone,2,CycPeptMPDB+ChEMBL,X439
 isoamyl_Gly,N-(3-methylbutyl)-glycine,G,CC(C)CCN([*])CC([*])=O |$;;;;;;_R1;;;_R2;$|,Backbone,2,CycPeptMPDB+ChEMBL,X358
 pentyl_Gly,N-pentyl-glycine,G,CCCCCN([*])CC([*])=O |$;;;;;;_R1;;;_R2;$|,Backbone,2,CycPeptMPDB+ChEMBL,X1183
+X11(E),X11(E),X,"[*]N/C(=C/c1ccccc1)C([*])=O |w:1.0,$_R1;;;;;;;;;;;_R2;$|",Backbone,2,manual,
+X11(Z),X11(Z),X,"[*]N/C(=C\c1ccccc1)C([*])=O |w:1.0,$_R1;;;;;;;;;;;_R2;$|",Backbone,2,manual,
+X2102(E),X2102(E),X,"C/C=C/C[C@@H](C)C(=O)[C@H](N(C)[*])C([*])=O |w:1.0,$;;;;;;;;;;;_R1;;_R2;$|",Backbone,2,manual,
+X727(E),X727(E),K,"Cl/C=C/CNCCCC[C@H](N[*])C([*])=O |w:1.0,$;;;;;;;;;;;_R1;;_R2;$|",Backbone,2,manual,
+X727(Z),X727(Z),K,"Cl/C=C\CNCCCC[C@H](N[*])C([*])=O |w:1.0,$;;;;;;;;;;;_R1;;_R2;$|",Backbone,2,manual,

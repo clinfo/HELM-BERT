@@ -34,7 +34,7 @@ from scripts.preprocessing.helpers.paths import (
 )
 
 # Configuration
-DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "Propedia_v2_unique_ppi_HELM_SMILES.csv"
+DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "05_final" / "propedia_ppi.csv"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
 DEFAULT_LOG_DIR = PREPROCESSING_OUTPUT_DIR
 

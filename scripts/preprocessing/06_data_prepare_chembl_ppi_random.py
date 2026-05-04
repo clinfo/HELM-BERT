@@ -35,7 +35,7 @@ from scripts.preprocessing.helpers.paths import (
     REPO_ROOT,
 )
 
-DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / 'chembl_ppi_helm_normalized.csv'
+DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "05_final" / "chembl_ppi.csv"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / 'data/downstream'
 DEFAULT_LOG_DIR = PREPROCESSING_OUTPUT_DIR
 
@@ -86,7 +86,20 @@ def load_positives(source: Path, activity_col: str = ACTIVITY_COL) -> pd.DataFra
     df = pd.read_csv(source)
     logger.info(f"Loaded {len(df)} rows from {source}")
 
-    pair_key = [COMPOUND_ID, TARGET_ID]
+    # Pair key is (HELM, target), NOT (compound_chembl_id, target).
+    # Same HELM ⇒ same molecule (the model's input is HELM); compound_chembl_id
+    # over-distinguishes (e.g. tritium-labelled isomers, salt forms produce
+    # different ChEMBL IDs but identical model input). Keying by HELM here
+    # collapses those into one canonical row, which prevents (HELM, target)
+    # leak across the train/test split downstream.
+    #
+    # Side effects worth knowing:
+    #   * df_pos[COMPOUND_ID] now lists only the lex-first canonical id per
+    #     HELM group; "ghost" ids never appear in df_pos and so are absent
+    #     from the negative-sampling pool below.
+    #   * pair_registry uses (canonical_compound_id, target) consistently,
+    #     so negatives can never collide with a positive on (HELM, target).
+    pair_key = [HELM_COL, TARGET_ID]
     pair_activity = df.groupby(pair_key)[activity_col].max().reset_index()
     pos_pairs = pair_activity[pair_activity[activity_col] == 1][pair_key]
     logger.info(f"Positive pairs (t_1u==1 after dedup): {len(pos_pairs)}")

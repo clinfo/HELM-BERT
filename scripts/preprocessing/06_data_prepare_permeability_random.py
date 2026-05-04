@@ -30,7 +30,7 @@ from scripts.preprocessing.helpers.paths import (
     REPO_ROOT,
 )
 
-DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "cycpeptmpdb_helm_normalized.csv"
+DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "05_final" / "cycpept_permeability_compounds.csv"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
 DEFAULT_LOG_DIR = PREPROCESSING_OUTPUT_DIR
 
