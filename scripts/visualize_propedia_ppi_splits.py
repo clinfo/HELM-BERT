@@ -58,8 +58,8 @@ DEFAULT_RESULTS_DIR = REPO_ROOT / "results" / "visualization"
 DEFAULT_LOG_DIR = REPO_ROOT / "outputs" / "visualization"
 
 # aCSM signatures
-SOURCE_FILE = REPO_ROOT / "local_data/intermediate_product/Propedia_v2_unique_ppi_HELM_SMILES.csv"
-SIGNATURE_DIR = REPO_ROOT / "local_data/intermediate_product/signatures_acsm_all"
+SOURCE_FILE = REPO_ROOT / "local_data/processed/05_final/propedia_ppi.csv"
+SIGNATURE_DIR = REPO_ROOT / "local_data/processed/signatures_acsm_all"
 SIGNATURE_FILE = "complex_signatures_acsm_all.csv"
 
 SEED = 42
