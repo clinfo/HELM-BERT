@@ -17,20 +17,20 @@ Usage:
 """
 
 import csv
-import os
 import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers.paths import MONOMER_LIBRARY_DIR
-
 STANDARD_20 = set("ACDEFGHIKLMNPQRSTVWY")
 
-INPUT = str(MONOMER_LIBRARY_DIR / "helm_monomer_library.csv")
-OUTPUT = str(MONOMER_LIBRARY_DIR / "helm_monomer_library_residues.csv")
-REPORT = str(MONOMER_LIBRARY_DIR / "residue_mapping_report.txt")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from helpers.paths import PROCESSED_DIR
+
+_OUT = PROCESSED_DIR / "monomer_library"
+INPUT = str(_OUT / "helm_monomer_library.csv")
+OUTPUT = str(_OUT / "helm_monomer_library_residues.csv")
+REPORT = str(_OUT / "residue_mapping_report.txt")
 
 
 def assign_residue(row):

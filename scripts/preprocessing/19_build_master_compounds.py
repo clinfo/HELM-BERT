@@ -40,7 +40,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers.logging_utils import setup_logger
-from helpers.paths import FINAL_DIR
+from helpers.paths import FINAL_DIR, MASTER_COMPOUNDS_PATH
 
 
 SOURCES: dict[str, tuple[str, str]] = {
@@ -174,7 +174,8 @@ def main() -> int:
     out = pd.DataFrame(rows)
     out.insert(0, "master_compound_id", [f"MC{i+1:0{pad}d}" for i in range(len(out))])
 
-    out_path = FINAL_DIR / "master_compounds.csv"
+    out_path = MASTER_COMPOUNDS_PATH
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(out_path, index=False)
 
     # Summary stats — what did the equivalence relation actually collapse?

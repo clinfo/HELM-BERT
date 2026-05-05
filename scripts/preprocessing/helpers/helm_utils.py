@@ -298,11 +298,14 @@ def apply_helm_corrections(
 
     Uses ``id_cols[0]`` as the lookup key. Applied as plain string
     replacement on the ``helm_col`` column — every occurrence of
-    ``original_token`` is rewritten. Each compound listed in
-    ``corrections`` must hit at least one matching token; a miss is
-    logged as a warning (likely the corrections file is stale).
+    ``original_token`` is rewritten. Misses (compound id absent from
+    this dataset, or token absent from a found compound's HELM) are
+    logged as warnings — these usually indicate the corrections file
+    is stale relative to the source data.
 
-    Returns ``(new_df, n_rows_affected)``.
+    Returns ``(new_df, n_rows_affected)``. ``n_rows_affected`` counts
+    each touched row at most once even if multiple token rewrites land
+    on the same row.
     """
     _log = log or logger
     if not corrections:
@@ -317,34 +320,42 @@ def apply_helm_corrections(
         return df, 0
 
     work = df.copy()
-    affected_rows = 0
-    misses: list[str] = []
+    touched_idx: set = set()
+    compound_misses: list[str] = []
+    token_misses: list[str] = []
     for cid, rewrites in corrections.items():
         mask = work[primary_id] == cid
         if not mask.any():
+            compound_misses.append(cid)
             continue
         for orig, new in rewrites:
             sub_mask = mask & work[helm_col].astype(str).str.contains(
                 re.escape(orig), regex=True
             )
             if not sub_mask.any():
-                misses.append(f"{cid}: {orig}")
+                token_misses.append(f"{cid}: {orig}")
                 continue
             work.loc[sub_mask, helm_col] = (
                 work.loc[sub_mask, helm_col].astype(str).str.replace(orig, new, regex=False)
             )
-            affected_rows += int(sub_mask.sum())
+            touched_idx.update(work.index[sub_mask].tolist())
 
-    if misses:
+    if compound_misses:
         _log.warning(
-            "HELM corrections: %d (compound, token) pairs did not match any "
-            "row — corrections file may be stale. Examples: %s",
-            len(misses),
-            misses[:3],
+            "HELM corrections: %d compound_id(s) listed in corrections file "
+            "have no rows in this dataset (file may be stale). Examples: %s",
+            len(compound_misses),
+            compound_misses[:5],
         )
-    _log.info(
-        "HELM corrections: rewrote tokens in %d rows", affected_rows
-    )
+    if token_misses:
+        _log.warning(
+            "HELM corrections: %d (compound, token) pairs found the compound "
+            "but the token was already absent from its HELM. Examples: %s",
+            len(token_misses),
+            token_misses[:5],
+        )
+    affected_rows = len(touched_idx)
+    _log.info("HELM corrections: rewrote tokens in %d rows", affected_rows)
     return work, affected_rows
 
 

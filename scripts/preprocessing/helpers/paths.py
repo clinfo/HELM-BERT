@@ -1,39 +1,55 @@
-"""Shared path constants for preprocessing scripts."""
+"""Path constants for the local preprocessing pipeline.
 
+The warehouse layout under ``local_data/`` mirrors the HELM_datasets
+internal structure:
+
+    local_data/
+      raw/{CycPeptMPDB,ChEMBL,CREMP,Propedia,monomer_library,curation}/
+      processed/{01_ingested,02_converted,03_helm_normalized,
+                 04_smiles_normalized,05_final,monomer_library}/
+
+All scripts depend on this single source of truth for layout.
+"""
 from __future__ import annotations
 
 from pathlib import Path
 
+# Resolve from this file's location:
+# helpers/paths.py -> helpers -> preprocessing -> scripts -> REPO_ROOT
+REPO_ROOT: Path = Path(__file__).resolve().parents[3]
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-LOCAL_DATA_DIR = REPO_ROOT / "local_data"
-RAW_DATA_DIR = LOCAL_DATA_DIR / "raw"
-INTERMEDIATE_PRODUCT_DIR = LOCAL_DATA_DIR / "intermediate_product"
-DATA_DIR = REPO_ROOT / "data"
-PREPROCESSING_OUTPUT_DIR = REPO_ROOT / "outputs/preprocessing"
+# Warehouse root.
+BASE: Path = REPO_ROOT / "local_data"
+RAW_DIR: Path = BASE / "raw"
+PROCESSED_DIR: Path = BASE / "processed"
+LOG_DIR: Path = REPO_ROOT / "outputs" / "preprocessing"
 
-# Monomer library — produced by the build pipeline (01–03_data_build_*),
-# consumed by 07_data_normalize_helm and downstream scripts. The canonical
-# copy lives under intermediate_product/ alongside other staged outputs;
-# data/monomer_library/ is kept as a tracked snapshot.
-MONOMER_LIBRARY_DIR = INTERMEDIATE_PRODUCT_DIR / "monomer_library"
-MONOMER_LIBRARY_PATH = MONOMER_LIBRARY_DIR / "helm_monomer_library.csv"
+MONOMER_LIBRARY_PATH: Path = PROCESSED_DIR / "monomer_library" / "helm_monomer_library.csv"
 
-# Hand-curated extensions to the auto-built monomer library.
-# These layer on top of the raw-source build (02_data_build_helm_monomer_library)
-# so adding curated monomers does NOT require modifying the build pipeline.
-# Both files are absent by default — the pipeline silently skips merging when missing.
-MANUAL_MONOMER_ADDITIONS_PATH = MONOMER_LIBRARY_DIR / "manual_additions.csv"
-HELM_CORRECTIONS_PATH = MONOMER_LIBRARY_DIR / "helm_corrections.csv"
+# Hand-curated inputs that layer on top of the raw-source build
+# (02_build_helm_monomer_library.py) and the HELM normalize step
+# (07_normalize_helm.py). Both files are absent by default — the
+# pipeline silently skips merging / correcting when missing.
+MANUAL_MONOMER_ADDITIONS_PATH: Path = RAW_DIR / "monomer_library" / "manual_monomer_additions.csv"
+HELM_CORRECTIONS_PATH: Path = RAW_DIR / "curation" / "helm_corrections.csv"
 
-# Staged warehouse layout (01_ingested → 05_final). Each pipeline stage
-# writes one CSV per dataset key (e.g. 05_final/chembl_ppi.csv). Stages
-# skipped by a given dataset have no file in that stage's directory.
-INGESTED_DIR = INTERMEDIATE_PRODUCT_DIR / "01_ingested"
-CONVERTED_DIR = INTERMEDIATE_PRODUCT_DIR / "02_converted"
-HELM_NORMALIZED_DIR = INTERMEDIATE_PRODUCT_DIR / "03_helm_normalized"
-SMILES_NORMALIZED_DIR = INTERMEDIATE_PRODUCT_DIR / "04_smiles_normalized"
-FINAL_DIR = INTERMEDIATE_PRODUCT_DIR / "05_final"
+# Per-dataset input files (raw or upstream-processed).
+CYCPEPT_RAW: Path = RAW_DIR / "CycPeptMPDB" / "CycPeptMPDB_Peptide_All.csv"
+CHEMBL_COMPOUNDS_RAW: Path = RAW_DIR / "ChEMBL" / "chembl36_helm_compounds.csv"
+CHEMBL_PPI_RAW: Path = RAW_DIR / "ChEMBL" / "helm_ppi_dataset.csv"
+CHEMBL_PPI_ALL_RAW: Path = RAW_DIR / "ChEMBL" / "helm_ppi_all_activities.csv"
+CREMP_RAW: Path = RAW_DIR / "CREMP" / "summary.csv"
+PROPEDIA_RAW_DIR: Path = RAW_DIR / "Propedia" / "raw"
+
+# Stage-numbered directories. Each pipeline stage writes to its own
+# directory; filenames within a stage are just the dataset key (e.g.
+# ``processed/05_final/cycpept_permeability_compounds.csv``). Stages
+# skipped by a given dataset simply don't have a file in that directory.
+INGESTED_DIR: Path = PROCESSED_DIR / "01_ingested"
+CONVERTED_DIR: Path = PROCESSED_DIR / "02_converted"
+HELM_NORMALIZED_DIR: Path = PROCESSED_DIR / "03_helm_normalized"
+SMILES_NORMALIZED_DIR: Path = PROCESSED_DIR / "04_smiles_normalized"
+FINAL_DIR: Path = PROCESSED_DIR / "05_final"
 
 STAGE_DIRS: dict[str, Path] = {
     "ingested": INGESTED_DIR,
@@ -43,20 +59,19 @@ STAGE_DIRS: dict[str, Path] = {
     "final": FINAL_DIR,
 }
 
-# Pipeline log directory (used by 07/08/09_data_*).
-LOG_DIR = PREPROCESSING_OUTPUT_DIR
+# Tracked downstream artifacts read directly by training (data/ is in git).
+DATA_DIR: Path = REPO_ROOT / "data"
+MLM_DIR: Path = DATA_DIR / "mlm"
+DOWNSTREAM_DIR: Path = DATA_DIR / "downstream"
 
-# Per-dataset raw inputs. The build pipeline reads these directly; rerun
-# the pipeline by re-pointing here if you swap source vintages.
-CYCPEPT_RAW = RAW_DATA_DIR / "CycPeptMPDB_Peptide_All_V1.2.csv"
-CHEMBL_COMPOUNDS_RAW = RAW_DATA_DIR / "chembl36_helm_compounds.csv"
-CHEMBL_PPI_RAW = RAW_DATA_DIR / "helm_ppi_dataset.csv"
-CHEMBL_PPI_ALL_RAW = RAW_DATA_DIR / "helm_ppi_all_activities.csv"
-CREMP_RAW = RAW_DATA_DIR / "CREMP_v1.1.csv"
-PROPEDIA_RAW_DIR = RAW_DATA_DIR / "propedia_v2"
+# Warehouse-level intermediates derived from PROCESSED_DIR but not consumed
+# by training directly. Kept under local_data/processed/ so they share the
+# ephemeral / regenerable life-cycle of the rest of the pipeline state.
+SIGNATURES_DIR: Path = PROCESSED_DIR / "signatures_acsm_all"
+MASTER_COMPOUNDS_PATH: Path = FINAL_DIR / "master_compounds.csv"
 
 
 def ensure_dirs() -> None:
-    """Create stage + log directories if missing. Idempotent."""
-    for d in (LOG_DIR, MONOMER_LIBRARY_DIR, *STAGE_DIRS.values()):
+    """Create output directories if missing. Idempotent."""
+    for d in (LOG_DIR, *STAGE_DIRS.values()):
         d.mkdir(parents=True, exist_ok=True)

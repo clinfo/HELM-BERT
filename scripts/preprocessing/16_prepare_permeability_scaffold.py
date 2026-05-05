@@ -9,8 +9,8 @@ never appear in both train and test sets.
 import sys
 from pathlib import Path
 
-if __package__ is None or __package__ == "":
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import argparse
 import logging
@@ -26,19 +26,15 @@ from rdkit.Chem import rdFingerprintGenerator
 
 from src.utils import flatten_groups, generate_scaffold, greedy_scaffold_partition
 
-from scripts.preprocessing.helpers.downstream import (
+from helpers.downstream import (
     aggregate_median_by_canonical_smiles,
     log_mlm_coverage,
 )
-from scripts.preprocessing.helpers.paths import (
-    INTERMEDIATE_PRODUCT_DIR,
-    PREPROCESSING_OUTPUT_DIR,
-    REPO_ROOT,
-)
+from helpers.paths import DOWNSTREAM_DIR, FINAL_DIR, LOG_DIR, REPO_ROOT
 
-DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "05_final" / "cycpept_permeability_compounds.csv"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
-DEFAULT_LOG_DIR = PREPROCESSING_OUTPUT_DIR
+DEFAULT_SOURCE = FINAL_DIR / "cycpept_permeability_compounds.csv"
+DEFAULT_OUTPUT_DIR = DOWNSTREAM_DIR
+DEFAULT_LOG_DIR = LOG_DIR
 
 SEED = 42
 TEST_RATIO = 0.1

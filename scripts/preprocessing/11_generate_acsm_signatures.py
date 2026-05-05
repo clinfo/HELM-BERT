@@ -34,17 +34,19 @@ except ImportError:
     def tqdm(iterable, **kwargs):
         return iterable
 
-# Resolve repo root and add Signa path
-REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from helpers.paths import FINAL_DIR, LOG_DIR, PROPEDIA_RAW_DIR, REPO_ROOT, SIGNATURES_DIR
+
+# Resolve Signa path
 SIGNA_PATH_DEFAULT = REPO_ROOT / 'src/utils/signa/Signa'
 sys.path.append(str(SIGNA_PATH_DEFAULT))
 import signa
 
 # Configuration (repo-relative defaults; CLI-overridable)
-DEFAULT_SOURCE_FILE = REPO_ROOT / 'local_data/intermediate_product/Propedia_v2_with_HELM_SMILES.csv'
-DEFAULT_COMPLEX_DIR = REPO_ROOT / 'local_data/raw/propedia_v2/complex2_3/complex'
-DEFAULT_OUTPUT_DIR = REPO_ROOT / 'local_data/intermediate_product/signatures_acsm_all'
-DEFAULT_LOG_DIR = REPO_ROOT / 'outputs/preprocessing'
+DEFAULT_SOURCE_FILE = FINAL_DIR / 'propedia_ppi.csv'
+DEFAULT_COMPLEX_DIR = PROPEDIA_RAW_DIR / 'complex2_3' / 'complex'
+DEFAULT_OUTPUT_DIR = SIGNATURES_DIR
+DEFAULT_LOG_DIR = LOG_DIR
 
 # Signa configuration
 SIGNA_TYPE = 'acsm-all'

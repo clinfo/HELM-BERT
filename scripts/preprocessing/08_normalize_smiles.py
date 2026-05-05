@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
-"""Add normalized_smiles + inchikey columns to each dataset's HELM-normalized CSV.
+"""Add normalized_smiles column to each dataset's HELM-normalized CSV.
 
 Reads ``processed/03_helm_normalized/{key}.csv``, applies
 :func:`helpers.smiles_utils.standardize_series` to the SMILES column,
 and writes ``processed/04_smiles_normalized/{key}.csv`` with all
-original columns plus two new ones:
+original columns plus one new column:
 
-    normalized_smiles  — RDKit canonical SMILES after the standardization
-                         pipeline (LargestFragment + Uncharger + isotope
-                         strip + RemoveHs). Human-readable display.
-    inchikey           — IUPAC InChIKey of the same standardized molecule.
-                         The dedup grouping key in stage 09 (mobile-H
-                         layer auto-collapses true tautomers; stereo
-                         layer preserves D/L and E/Z distinctions).
+    normalized_smiles  — RDKit canonical SMILES of the SAME molecule.
+                         No structural mutation: salts, charges, and
+                         isotope labels are preserved as registered.
+                         The dedup grouping key in stage 09.
 
 Sanity check emitted to the log:
     - count of rows whose stereo center count decreased (must be 0)
-    - count of multi-component inputs whose largest fragment ratio < 2
 
 Usage:
     python 08_normalize_smiles.py
@@ -55,11 +51,10 @@ def _stereo_center_count(smi: str) -> int:
 
 
 def _verify_stereo_preserved(in_smis: pd.Series, out_smis: pd.Series, log) -> int:
-    """Compare per-row stereo-center counts before/after normalization.
+    """Compare per-row stereo-center counts before/after canonicalization.
 
     Returns the number of rows where the count *decreased* (stereo loss).
-    Lossy normalization should never happen with the current pipeline; if
-    it does, the test catches it.
+    Canonicalization should never lose stereo; if it does, regression.
     """
     losses = 0
     for in_smi, out_smi in zip(in_smis.astype(str), out_smis.astype(str)):
@@ -97,9 +92,8 @@ def normalize_dataset(cfg: DatasetConfig, log) -> dict[str, int]:
         )
 
     smi_in = cast(pd.Series, df[cfg.smiles_col])
-    smi_norm, inchikey, stats = standardize_series(smi_in, log=log, label=cfg.key)
+    smi_norm, stats = standardize_series(smi_in, log=log, label=cfg.key)
     df["normalized_smiles"] = smi_norm
-    df["inchikey"] = inchikey
 
     losses = _verify_stereo_preserved(smi_in, smi_norm, log)
     stats_dict = stats.as_dict()
@@ -142,18 +136,11 @@ def main() -> int:
     logger.info("=" * 70)
     for key, s in summary.items():
         logger.info(
-            "[%s] total=%d parsed=%d parse_fail=%d frag_strip=%d uncharged=%d "
-            "isotope_strip=%d inchikey_fail=%d ratio_lt_2=%d unchanged=%d "
-            "stereo_loss=%d",
+            "[%s] total=%d parsed=%d parse_fail=%d unchanged=%d stereo_loss=%d",
             key,
             s["total"],
             s["parsed"],
             s["parse_failed"],
-            s["fragment_stripped"],
-            s["uncharged"],
-            s["isotope_stripped"],
-            s["inchikey_failed"],
-            s["fragment_ratio_below_2"],
             s["unchanged"],
             s["stereo_losses"],
         )

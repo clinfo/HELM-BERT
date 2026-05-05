@@ -29,20 +29,15 @@ import lightning as L
 import numpy as np
 import pandas as pd
 
-if __package__ is None or __package__ == "":
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from scripts.preprocessing.helpers.downstream import log_mlm_coverage
-from scripts.preprocessing.helpers.paths import (
-    INTERMEDIATE_PRODUCT_DIR,
-    PREPROCESSING_OUTPUT_DIR,
-    REPO_ROOT,
-)
+from helpers.downstream import log_mlm_coverage
+from helpers.paths import DOWNSTREAM_DIR, FINAL_DIR, LOG_DIR, REPO_ROOT
 
 
-DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "05_final" / "chembl_ppi.csv"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
-DEFAULT_LOG_DIR = PREPROCESSING_OUTPUT_DIR
+DEFAULT_SOURCE = FINAL_DIR / "chembl_ppi.csv"
+DEFAULT_OUTPUT_DIR = DOWNSTREAM_DIR
+DEFAULT_LOG_DIR = LOG_DIR
 
 SEED = 42
 NEGATIVE_RATIO = 4

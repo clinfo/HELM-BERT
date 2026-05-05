@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Per-source deduplication on (helm_col, inchikey, *dedup_extra_keys).
+"""Per-source deduplication on (helm_col, normalized_smiles, *dedup_extra_keys).
 
 Reads ``processed/04_smiles_normalized/{key}.csv``, collapses rows that
 share the dataset-specific dedup key, and writes
 ``processed/05_final/{key}.csv``.
 
-The grouping key uses ``inchikey`` (not ``normalized_smiles``) as the
-"same molecule" identity. InChI's mobile-H layer canonicalizes common
-tautomers (histidine, guanidinium, amide/imidic-acid) automatically
-while preserving D/L and E/Z distinctions in the stereo block — so two
-rows with the same HELM but tautomer-only SMILES differences collapse,
-whereas truly distinct stereoisomers stay separate.
+The grouping key uses ``normalized_smiles`` (RDKit canonical SMILES) as
+the "same molecule" identity — strict byte-equality of the canonical
+form. Two rows must have identical HELM AND identical canonical SMILES
+to collapse. This treats salts, protonation states, isotope labels,
+and tautomer drawings as DISTINCT, preserving each as registered.
 
 Determinism contract:
     * Within each duplicate group, the surviving row is the one with the
@@ -22,9 +21,10 @@ Determinism contract:
 
 Diagnostics emitted to ``05_final/{key}.csv``:
     * ``helm_smiles_consistent`` — False if a row's HELM appears with
-      more than one InChIKey across the dataset (i.e. HELM cannot
-      uniquely identify the molecule, usually a ChEMBL X-monomer
-      curation artifact). True otherwise.
+      more than one normalized_smiles across the dataset (i.e. HELM
+      cannot uniquely identify the molecule, usually a ChEMBL
+      X-monomer curation artifact, or salts / protonation differences
+      that the source registered against the same HELM). True otherwise.
 
 Sanity checks:
     * After dedup, ``df.groupby(dedup_key).size().max() == 1``
@@ -53,16 +53,17 @@ from helpers.logging_utils import setup_logger
 from helpers.paths import ensure_dirs
 
 
-DEDUP_BASE_MOL_KEY = "inchikey"  # the "same molecule" column from stage 08
+DEDUP_BASE_MOL_KEY = "normalized_smiles"  # the "same molecule" column from stage 08
 
 
 def _build_dedup_key(cfg: DatasetConfig) -> list[str]:
     """The full grouping key for this dataset.
 
-    Always: ``[helm_col, inchikey, *dedup_extra_keys]``. InChIKey is the
-    canonical molecular-identity column; ``dedup_extra_keys`` carry
-    measurement / pair context that should NOT collapse (chembl_ppi
-    target+type+value, propedia_ppi receptor sequence, …).
+    Always: ``[helm_col, normalized_smiles, *dedup_extra_keys]``. Canonical
+    SMILES is the molecular-identity column (strict byte-equality);
+    ``dedup_extra_keys`` carry measurement / pair context that should NOT
+    collapse (chembl_ppi target+type+value, propedia_ppi receptor
+    sequence, …).
     """
     base = [cfg.helm_col, DEDUP_BASE_MOL_KEY]
     return base + list(cfg.dedup_extra_keys)
@@ -175,10 +176,11 @@ def dedup_dataset(cfg: DatasetConfig, log) -> dict[str, int]:
     out["Source_IDs"] = source_ids
 
     # helm_smiles_consistent: False when one HELM maps to multiple
-    # InChIKeys — i.e. HELM cannot uniquely identify the molecule.
-    # Almost always indicates a ChEMBL X-monomer that needs splitting
-    # (E/Z geometry, aromaticity perception artifact). The per-row flag
-    # lets downstream filter or audit these without re-grouping.
+    # canonical SMILES — i.e. HELM cannot uniquely identify the molecule.
+    # Causes include: ChEMBL X-monomer that needs splitting (E/Z, etc.),
+    # source registering the same HELM with salt-form variants, or
+    # tautomer-only drawing differences in the source. Per-row flag lets
+    # downstream filter or audit without re-grouping.
     helm_to_keys = out.groupby(cfg.helm_col)[DEDUP_BASE_MOL_KEY].nunique()
     ambiguous_helms = set(helm_to_keys[helm_to_keys > 1].index)
     out["helm_smiles_consistent"] = ~out[cfg.helm_col].isin(ambiguous_helms)
@@ -191,7 +193,7 @@ def dedup_dataset(cfg: DatasetConfig, log) -> dict[str, int]:
     if n_inconsistent:
         log.warning(
             "[%s] %d rows flagged helm_smiles_consistent=False "
-            "(HELM maps to multiple InChIKeys — see %d HELM groups)",
+            "(HELM maps to multiple canonical SMILES — see %d HELM groups)",
             cfg.key,
             n_inconsistent,
             len(ambiguous_helms),

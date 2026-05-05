@@ -5,7 +5,7 @@ Pulls SMILES from ChEMBL v36 / CycPeptMPDB monomer libraries where available.
 For missing monomers (Me_dN, Me_dQ, Me_dS etc.), generates SMILES by
 N-methylation + stereochemistry inversion of the corresponding L-amino acid.
 
-Output: HELM_datasets/raw/monomer_library/CREMP_monomer_library.csv
+Output: HELM_datasets/raw/monomer_library/cremp_monomer_library.csv
 """
 
 import csv
@@ -17,16 +17,12 @@ from pathlib import Path
 from rdkit import Chem
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers.paths import RAW_DATA_DIR, MONOMER_LIBRARY_DIR
+from helpers.paths import RAW_DIR
 
-# Source monomer libraries (raw drops) and build output. The build pipeline
-# reads ChEMBL/CycPept monomer libraries from raw/monomer_library/ and emits
-# CREMP_monomer_library.csv next to them; 02_data_build_helm_monomer_library
-# then merges all three into the unified library under MONOMER_LIBRARY_DIR.
-RAW_MONO = RAW_DATA_DIR / "monomer_library"
+RAW_MONO = RAW_DIR / "monomer_library"
 CHEMBL_XML = RAW_MONO / "chembl_36_monomer_library.xml"
 CYCPEPT_CSV = RAW_MONO / "CycPeptMPDB_Monomer_All.csv"
-OUTPUT = RAW_MONO / "CREMP_monomer_library.csv"
+OUTPUT = RAW_MONO / "cremp_monomer_library.csv"
 
 CREMP_MONOMERS = [
     "A","C","D","E","F","G","H","I","K","L","N","P","Q","R","S","T","V","W","Y",

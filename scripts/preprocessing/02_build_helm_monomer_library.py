@@ -25,23 +25,23 @@ from rdkit import Chem
 from rdkit.Chem import rdMolDescriptors
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers.paths import RAW_DATA_DIR, MONOMER_LIBRARY_DIR
+from helpers.paths import PROCESSED_DIR, RAW_DIR
 
-RAW_MONO = RAW_DATA_DIR / "monomer_library"
-OUT_DIR = MONOMER_LIBRARY_DIR
+RAW_MONO = RAW_DIR / "monomer_library"
+OUT_DIR = PROCESSED_DIR / "monomer_library"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 CHEMBL_XML = RAW_MONO / "chembl_36_monomer_library.xml"
 CYCPEPT_CSV = RAW_MONO / "CycPeptMPDB_Monomer_All.csv"
-CREMP_CSV = RAW_MONO / "CREMP_monomer_library.csv"
+CREMP_CSV = RAW_MONO / "cremp_monomer_library.csv"
+
+# Hand-curated layer merged on top of the auto-built library.
+# Optional — if absent, build proceeds without manual additions.
+MANUAL_ADDITIONS = RAW_MONO / "manual_monomer_additions.csv"
 
 OUTPUT = OUT_DIR / "helm_monomer_library.csv"
 MERGE_LOG = OUT_DIR / "merge_log.csv"
 REPORT = OUT_DIR / "build_report.txt"
-
-# Hand-curated layer merged on top of the auto-built library.
-# Optional — if absent, build proceeds without manual additions.
-MANUAL_ADDITIONS = OUT_DIR / "manual_additions.csv"
 
 FIELDS = [
     "symbol", "name", "natural_analog", "smiles",
@@ -208,20 +208,50 @@ for sym, entry in sorted(cremp_gen.items(), key=lambda x: (is_generic(x[0]), x[0
 # (added_by, reason) are accepted in the input file but stripped here
 # so the output schema stays identical to the raw build.
 
+# Required fields that must be non-empty; n_rgroups must additionally be
+# parseable as int. monomer_type is constrained to the values used by
+# the rest of the library — a typo here would silently produce an
+# invalid library entry that downstream tools can't classify.
+REQUIRED_MANUAL_FIELDS = ("symbol", "smiles", "monomer_type", "n_rgroups", "source")
+VALID_MONOMER_TYPES = {"Backbone", "Terminal", "Branch", "Undefined"}
+
 manual_appended = 0
 if MANUAL_ADDITIONS.exists():
     with open(MANUAL_ADDITIONS) as f:
         # Skip leading comment lines starting with '#'.
         rdr = csv.DictReader(line for line in f if not line.lstrip().startswith("#"))
-        for row in rdr:
+        for line_no, row in enumerate(rdr, start=2):
             sym = (row.get("symbol") or "").strip()
             if not sym:
                 continue
+            # Schema validation: every required field non-empty
+            missing = [f for f in REQUIRED_MANUAL_FIELDS if not (row.get(f) or "").strip()]
+            if missing:
+                raise ValueError(
+                    f"manual_monomer_additions.csv row {line_no} ({sym!r}): "
+                    f"required field(s) empty: {missing}"
+                )
+            # n_rgroups must be a non-negative integer
+            try:
+                int((row.get("n_rgroups") or "").strip())
+            except ValueError:
+                raise ValueError(
+                    f"manual_monomer_additions.csv row {line_no} ({sym!r}): "
+                    f"n_rgroups must be an integer, got {row.get('n_rgroups')!r}"
+                )
+            mt = (row.get("monomer_type") or "").strip()
+            if mt not in VALID_MONOMER_TYPES:
+                raise ValueError(
+                    f"manual_monomer_additions.csv row {line_no} ({sym!r}): "
+                    f"monomer_type {mt!r} not in {sorted(VALID_MONOMER_TYPES)}"
+                )
+            # Symbol-collision guard
             if sym in unified:
                 raise ValueError(
-                    f"manual_additions.csv: symbol {sym!r} collides with an "
-                    "auto-built entry. Manual layer must not overwrite raw "
-                    "sources — pick a different symbol or remove the conflict."
+                    f"manual_monomer_additions.csv row {line_no}: symbol {sym!r} "
+                    "collides with an auto-built entry. Manual layer must "
+                    "not overwrite raw sources — pick a different symbol "
+                    "or remove the conflict."
                 )
             unified[sym] = {k: row.get(k, "") for k in FIELDS}
             manual_appended += 1
@@ -272,7 +302,7 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     Monomers: {len(chembl)}
 
   CREMP v1.1  (generated monomers only — not present in above DBs)
-    File:     raw/monomer_library/CREMP_monomer_library.csv
+    File:     raw/monomer_library/cremp_monomer_library.csv
     Generated: {len(cremp_gen)}
 
 ════════════════════════════════════════════════════════════════
@@ -301,7 +331,7 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     (see merge_log.csv for full evidence with raw SMILES from both sources)
 
   Hand-curated additions: {manual_appended}
-    (from manual_additions.csv if present)
+    (from manual_monomer_additions.csv if present)
 
 ════════════════════════════════════════════════════════════════
 4. FINAL LIBRARY

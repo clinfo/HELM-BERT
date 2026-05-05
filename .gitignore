@@ -192,6 +192,13 @@ cython_debug/
 /checkpoints/
 /results/
 /wandb/
+/tools/
+
+# Preprocessing scratch (timestamped backups)
+scripts/preprocessing.bak.*/
+
+# HELM_datasets workspace (absorbed into local_data/ + scripts/preprocessing/)
+/HELM_datasets/
 
 # Model checkpoints and weights
 *.ckpt

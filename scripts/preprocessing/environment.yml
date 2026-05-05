@@ -1,0 +1,23 @@
+# Conda/micromamba environment for the HELM_datasets pipeline.
+#
+# Create with:
+#   micromamba env create -f environment.yml
+#   # or: conda env create -f environment.yml
+#
+# Run scripts via the env so libstdc++ from conda-forge takes precedence
+# over the older system libstdc++ — calling the env's python directly
+# (without activation) can fail RDKit imports with a GLIBCXX_3.4.30 error
+# on hosts with old libstdc++:
+#   micromamba run -n helm-pipeline python scripts/02_build_helm_monomer_library.py
+#
+# Versions are pinned to what the pipeline was tested against. Patch
+# updates within the same minor are generally safe.
+name: helm-pipeline
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - rdkit=2023.03.3
+  - pandas=3.0.*
+  - numpy=1.26.*

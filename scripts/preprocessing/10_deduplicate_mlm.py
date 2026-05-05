@@ -17,14 +17,14 @@ from typing import Tuple
 import pandas as pd
 from rdkit import Chem
 
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from helpers.paths import FINAL_DIR, LOG_DIR, MLM_DIR, REPO_ROOT
 
 INPUT_FILES = {
-    'cycpeptmpdb': REPO_ROOT / 'local_data/intermediate_product/cycpeptmpdb_helm_normalized.csv',
-    'chembl': REPO_ROOT / 'local_data/intermediate_product/chembl_helm_normalized.csv',
-    'propedia': REPO_ROOT / 'local_data/intermediate_product/Propedia_v2_with_HELM_SMILES.csv',
-    'cremp': REPO_ROOT / 'local_data/intermediate_product/CREMP_v1.1_helm.csv',
+    'cycpeptmpdb': FINAL_DIR / 'cycpept_permeability_compounds.csv',
+    'chembl':      FINAL_DIR / 'chembl_compounds.csv',
+    'propedia':    FINAL_DIR / 'propedia_compounds.csv',
+    'cremp':       FINAL_DIR / 'cremp_conformer_compounds.csv',
 }
 
 SMILES_COLUMNS = {
@@ -43,8 +43,8 @@ HELM_COLUMNS = {
 
 PRIORITY_ORDER = ['cycpeptmpdb', 'chembl', 'propedia', 'cremp']
 
-DEFAULT_OUTPUT_DIR = REPO_ROOT / 'data/mlm'
-DEFAULT_LOG_DIR = REPO_ROOT / 'outputs/preprocessing'
+DEFAULT_OUTPUT_DIR = MLM_DIR
+DEFAULT_LOG_DIR = LOG_DIR
 
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 

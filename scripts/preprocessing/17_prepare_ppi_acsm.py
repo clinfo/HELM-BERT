@@ -23,8 +23,7 @@ for key in ('OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'OMP_NUM_THREADS', 'NUMEX
 import sys
 from pathlib import Path
 
-if __package__ is None or __package__ == "":
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import argparse
 import logging
@@ -38,18 +37,14 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-from scripts.preprocessing.helpers.downstream import log_mlm_coverage
-from scripts.preprocessing.helpers.paths import (
-    INTERMEDIATE_PRODUCT_DIR,
-    PREPROCESSING_OUTPUT_DIR,
-    REPO_ROOT,
-)
+from helpers.downstream import log_mlm_coverage
+from helpers.paths import DOWNSTREAM_DIR, FINAL_DIR, LOG_DIR, REPO_ROOT, SIGNATURES_DIR
 
 # Configuration
-DEFAULT_SOURCE = INTERMEDIATE_PRODUCT_DIR / "05_final" / "propedia_ppi.csv"
-DEFAULT_SIGNATURE_DIR = INTERMEDIATE_PRODUCT_DIR / "signatures_acsm_all"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/downstream"
-DEFAULT_LOG_DIR = PREPROCESSING_OUTPUT_DIR
+DEFAULT_SOURCE = FINAL_DIR / "propedia_ppi.csv"
+DEFAULT_SIGNATURE_DIR = SIGNATURES_DIR
+DEFAULT_OUTPUT_DIR = DOWNSTREAM_DIR
+DEFAULT_LOG_DIR = LOG_DIR
 
 SEED = 42
 TEST_RATIO = 0.2
