@@ -1,0 +1,23 @@
+# =============================================================================
+# HELM-BERT MLM Training Configuration (No CREMP)
+# =============================================================================
+# Usage:
+#   CUDA_VISIBLE_DEVICES=2 python scripts/train_mlm.py --config configs/mlm_no_cremp.yaml
+
+paths:
+  hf_checkpoint_name: helmbert-base_no_cremp
+
+data:
+  datasets:
+    - name: chembl
+      file: chembl_deduplicated.csv
+      helm_column: helm_notation
+    - name: cycpeptmpdb
+      file: cycpeptmpdb_deduplicated.csv
+      helm_column: HELM
+    - name: propedia
+      file: propedia_deduplicated.csv
+      helm_column: Peptide_HELM
+
+logging:
+  tags: [no_cremp]

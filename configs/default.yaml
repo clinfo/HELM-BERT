@@ -67,3 +67,4 @@ logging:
   wandb_entity: null
   disable_wandb: false
   tags: []
+  run_tag: null

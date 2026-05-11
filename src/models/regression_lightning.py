@@ -25,8 +25,24 @@ from src.utils.metrics import compute_regression_metrics
 
 logger = logging.getLogger(__name__)
 
-# NIG output count: gamma, nu, alpha, beta
 NIG_NUM_OUTPUTS = 4
+
+
+class AttentionPooler(nn.Module):
+    """Learnable attention pooling over sequence positions."""
+
+    def __init__(self, hidden_size: int):
+        super().__init__()
+        self.query = nn.Linear(hidden_size, 1)
+
+    def forward(
+        self, hidden_states: torch.Tensor, attention_mask: torch.Tensor = None
+    ) -> torch.Tensor:
+        scores = self.query(hidden_states).squeeze(-1)  # [batch, seq]
+        if attention_mask is not None:
+            scores = scores.masked_fill(attention_mask == 0, float("-inf"))
+        weights = F.softmax(scores, dim=-1)  # [batch, seq]
+        return torch.bmm(weights.unsqueeze(1), hidden_states).squeeze(1)
 
 
 @dataclass
@@ -48,6 +64,7 @@ class RegressionTrainingConfig:
     total_steps: int = 0
     warmup_ratio: float = 0.01
     decay_ratio: float = 0.10
+    pooler_type: str = "mean"
 
 
 class HELMBertRegressionLightning(L.LightningModule):
@@ -93,13 +110,16 @@ class HELMBertRegressionLightning(L.LightningModule):
             trust_remote_code=self.trust_remote_code,
         )
 
-        # Apply freeze setting
+        self.use_attention_pooling = training_config.pooler_type == "attention"
+        if self.use_attention_pooling:
+            self.attention_pooler = AttentionPooler(config.hidden_size)
+            logger.info("Using attention pooling (replaces mean pooling)")
+
         if self.training_config.freeze_encoder:
             for param in self._encoder.parameters():
                 param.requires_grad = False
             logger.info("Encoder frozen (freeze_encoder=True)")
 
-        # Storage for metrics
         self.validation_outputs: List[Dict] = []
         self.test_outputs: List[Dict] = []
 
@@ -134,12 +154,25 @@ class HELMBertRegressionLightning(L.LightningModule):
                 evidence_params: {gamma, nu, alpha, beta} each [batch]
                 uncertainty: {aleatoric, epistemic} each [batch]
         """
-        outputs = self.model(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
-            return_dict=True,
-        )
-        logits = outputs.logits  # [batch, 4]
+        if self.use_attention_pooling:
+            base_outputs = self._encoder(
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                return_dict=True,
+            )
+            pooled = self.attention_pooler(
+                base_outputs.last_hidden_state, batch["attention_mask"]
+            )
+            if hasattr(self.model, "dropout"):
+                pooled = self.model.dropout(pooled)
+            logits = self.model.classifier(pooled)
+        else:
+            outputs = self.model(
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                return_dict=True,
+            )
+            logits = outputs.logits  # [batch, 4]
 
         # NIG parameterization with constraints.
         # dtype-aware eps floor: prevents beta/(nu*(alpha-1)) blowup across precisions.
@@ -193,24 +226,29 @@ class HELMBertRegressionLightning(L.LightningModule):
 
         return loss
 
-    def validation_step(self, batch: Dict[str, Any], batch_idx: int) -> None:
-        """Validation step."""
+    def validation_step(self, batch: Dict[str, Any], batch_idx: int, dataloader_idx: int = 0) -> None:
+        """Validation step. dataloader_idx=0 is val, 1 is test."""
         outputs = self(batch)
         targets = batch["target"].float()
 
         loss = self._compute_loss(outputs, targets)
 
+        prefix = "val" if dataloader_idx == 0 else "test"
+        prog_bar = dataloader_idx == 0
+
         self.log(
-            "val_loss",
+            f"{prefix}_loss",
             loss,
             on_step=False,
             on_epoch=True,
-            prog_bar=True,
+            prog_bar=prog_bar,
             sync_dist=True,
             batch_size=targets.size(0),
+            add_dataloader_idx=False,
         )
 
-        self.validation_outputs.append(
+        storage = self.validation_outputs if dataloader_idx == 0 else self.test_outputs
+        storage.append(
             {
                 "predictions": outputs["predictions"].detach(),
                 "targets": targets.detach(),
@@ -261,11 +299,12 @@ class HELMBertRegressionLightning(L.LightningModule):
         return result
 
     def on_validation_epoch_end(self) -> None:
-        """Compute validation metrics."""
+        """Compute validation and test metrics."""
         self._compute_epoch_metrics(self.validation_outputs, "val")
+        self._compute_epoch_metrics(self.test_outputs, "test")
 
     def on_test_epoch_end(self) -> None:
-        """Compute test metrics."""
+        """Compute test metrics (standalone test)."""
         self._compute_epoch_metrics(self.test_outputs, "test")
 
     def _compute_epoch_metrics(self, outputs: List[Dict], prefix: str) -> None:
@@ -312,8 +351,12 @@ class HELMBertRegressionLightning(L.LightningModule):
                 "lr": self.training_config.encoder_lr,
             })
 
+        head_params = list(self.model.classifier.parameters())
+        if self.use_attention_pooling:
+            head_params += list(self.attention_pooler.parameters())
+
         param_groups.append({
-            "params": self.model.classifier.parameters(),
+            "params": head_params,
             "lr": self.training_config.head_lr,
         })
 

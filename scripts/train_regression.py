@@ -3,7 +3,6 @@
 
 Usage:
     python scripts/train_regression.py --config configs/permeability_random.yaml
-    python scripts/train_regression.py --config configs/sst2_random.yaml
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ import pandas as pd
 from lightning.pytorch.loggers import WandbLogger
 from transformers import AutoTokenizer
 
-from scripts.training_utils import (
+from scripts.helpers.training import (
     SEPARATOR_LINE,
     config_to_checkpoint_config,
     config_to_display_config,
@@ -57,7 +56,6 @@ def main():
     if "--config" not in sys.argv:
         print("Error: --config is required.")
         print("  python scripts/train_regression.py --config configs/permeability_random.yaml")
-        print("  python scripts/train_regression.py --config configs/sst2_random.yaml")
         sys.exit(1)
     config = load_config(task="regression")
 
@@ -68,7 +66,8 @@ def main():
     )
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"regression_{config.data.split_name}_{get_model_tag(config)}_{timestamp}"
+    tag = f"_{config.logging.run_tag}" if config.logging.run_tag else ""
+    run_name = f"regression_{config.data.split_name}_{get_model_tag(config)}{tag}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     logger = setup_logging(output_dir, timestamp, "train_regression")
@@ -125,6 +124,7 @@ def main():
         total_steps=total_steps,
         warmup_ratio=config.training.warmup_ratio,
         decay_ratio=config.training.decay_ratio,
+        pooler_type=config.model.pooler_type,
     )
 
     model = HELMBertRegressionLightning(
@@ -146,7 +146,7 @@ def main():
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
-        tags=build_tags(config, ["downstream", "regression", "evidential", config.data.split_name]),
+        tags=build_tags(config, ["downstream", "regression", "evidential", "permeability", config.data.split_name]),
     )
 
     trainer = L.Trainer(

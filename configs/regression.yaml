@@ -2,11 +2,10 @@
 # HELM-BERT Evidential Regression Configuration
 # =============================================================================
 # Inherits common settings from default.yaml.
-# Do not use directly — use permeability_random.yaml, sst2_random.yaml, etc.
+# Do not use directly — use task-specific configs such as permeability_random.yaml.
 #
 # Usage:
 #   python scripts/train_regression.py --config configs/permeability_random.yaml
-#   python scripts/train_regression.py --config configs/sst2_random.yaml
 
 # =============================================================================
 # Paths (overridden by task-specific configs)
@@ -21,6 +20,7 @@ paths:
 model:
   freeze_encoder: false
   encoder_attribute_name: helmbert
+  pooler_type: mean
 
   # Classifier head
   classifier:

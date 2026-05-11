@@ -20,7 +20,7 @@ paths:
 # Model
 # =============================================================================
 model:
-  from_scratch: false
+  from_scratch: true
   use_emd: true  # Enhanced Mask Decoder (DeBERTa feature)
 
   # Architecture (only used when from_scratch: true)
@@ -30,6 +30,8 @@ model:
     num_attention_heads: 12
     intermediate_size: 3072
     max_position_embeddings: 512
+    hidden_dropout_prob: 0.1
+    attention_probs_dropout_prob: 0.1
 
 # =============================================================================
 # Training
@@ -98,6 +100,6 @@ checkpoint:
   monitor: val_loss
   mode: min
   filename_pattern: "{epoch}-{val_loss:.4f}"
-  save_top_k: 10
+  save_top_k: 30
   save_last: true
 

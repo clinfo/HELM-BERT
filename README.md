@@ -185,46 +185,48 @@ All downstream tasks use Evidential Deep Learning ([Soleimany et al. 2021](https
 
 The `evidence.lambda_coeff` controls the regularization strength between task loss and evidence penalty.
 
-## Performance
+## Benchmarks
 
-### Permeability Regression (CycPeptMPDB)
+Train/test counts reflect the current released split files.
 
-| Split | Target | Train | Test | R² | Pearson | RMSE | MAE |
-|:-----:|:------:|:-----:|:----:|:--:|:-------:|:----:|:---:|
-| Random | Mixed | 6,944 | 772 | 0.769 | 0.878 | 0.388 | 0.269 |
-| Random | PAMPA | 6,103 | 679 | 0.765 | 0.875 | 0.384 | 0.275 |
-| Random | Caco-2 | 971 | 108 | 0.758 | 0.876 | 0.414 | 0.303 |
-| Scaffold | Mixed | 6,944 | 772 | 0.643 | 0.812 | 0.380 | 0.284 |
-| Scaffold | PAMPA | 6,104 | 678 | 0.627 | 0.810 | 0.372 | 0.281 |
-| Scaffold | Caco-2 | 958 | 121 | 0.698 | 0.849 | 0.383 | 0.287 |
+### CycPeptMPDB Permeability
+
+| Split Regime | Target | Train | Test | R² | Pearson | RMSE | MAE |
+|:------------:|:------:|:-----:|:----:|:--:|:-------:|:----:|:---:|
+| Random | Mixed | 6,945 | 772 | 0.658 | 0.817 | 0.471 | 0.300 |
+| Random | PAMPA | 6,262 | 696 | 0.800 | 0.895 | 0.355 | 0.253 |
+| Random | Caco-2 | 1,126 | 126 | 0.747 | 0.866 | 0.388 | 0.289 |
+| Scaffold | Mixed | 6,945 | 772 | 0.502 | 0.723 | 0.450 | 0.324 |
+| Scaffold | PAMPA | 6,262 | 696 | 0.529 | 0.739 | 0.412 | 0.295 |
+| Scaffold | Caco-2 | 1,127 | 125 | 0.637 | 0.874 | 0.405 | 0.334 |
 
 Val 10% from train. Scaffold split by Murcko scaffolds.
 
-<p align="center"><img src="assets/tsne_permeability_splits.png" width="800"></p>
+<p align="center"><img src="assets/tsne_cycpeptmpdb_permeability_mix_random_scaffold.png" width="800"></p>
 
-### PPI Classification (Propedia v2)
+### Propedia v2 PPI
 
-| Split | Train | Test | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
-|:-----:|:-----:|:----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 80,225 | 20,060 | 0.972 | 0.912 | 0.859 | 0.824 | 0.911 |
-| aCSM | 80,415 | 18,805 | 0.868 | 0.702 | 0.613 | 0.559 | 0.735 |
+| Split Regime | Train | Test | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
+|:------------:|:-----:|:----:|:-------:|:------:|:--:|:---:|:------------:|
+| Random | 80,225 | 20,060 | 0.968 | 0.901 | 0.847 | 0.808 | 0.906 |
+| aCSM | 90,215 | 9,575 | 0.862 | 0.683 | 0.587 | 0.522 | 0.722 |
 
 Val 10% from train, 1:4 positive:negative ratio.
 - **Random**: random split
 - **aCSM**: clustering-based split on aCSM-ALL complex signatures with protein overlap pruning
 
-<p align="center"><img src="assets/tsne_ppi_splits.png" width="800"></p>
+<p align="center"><img src="assets/tsne_propedia_ppi_random_acsm.png" width="800"></p>
 
-### SST2 Binding Affinity (pChEMBL)
+### ChEMBL PPI
 
-| Split | Train | Test | R² | Pearson | RMSE | MAE |
-|:-----:|:-----:|:----:|:--:|:-------:|:----:|:---:|
-| Random | 267 | 30 | 0.312 | 0.600 | 0.742 | 0.499 |
-| Scaffold | 268 | 29 | 0.006 | 0.236 | 0.632 | 0.551 |
+| Split Regime | Train | Test | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
+|:------------:|:-----:|:----:|:-------:|:------:|:--:|:---:|:------------:|
+| Random | 46,650 | 5,180 | 0.992 | 0.975 | 0.948 | 0.936 | 0.969 |
+| Family | 41,465 | 10,365 | 0.786 | 0.449 | 0.267 | 0.222 | 0.570 |
 
-Val 10% from train. Scaffold split by Murcko scaffolds.
+Val 10% from train.
 
-<p align="center"><img src="assets/tsne_sst2_splits.png" width="800"></p>
+<p align="center"><img src="assets/tsne_chembl_ppi_random_family.png" width="800"></p>
 
 
 ## Paper Checkpoint

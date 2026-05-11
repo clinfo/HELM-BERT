@@ -1,0 +1,18 @@
+# =============================================================================
+# ChEMBL PPI - Family Split
+# =============================================================================
+# Usage: python scripts/train_ppi.py --config configs/ppi_chembl_family.yaml
+
+training:
+  max_epochs: 70
+
+data:
+  split_name: chembl_family
+  train_file: ./data/downstream/chembl_ppi_family_train.csv
+  test_file: ./data/downstream/chembl_ppi_family_test.csv
+  drug_column: helm_notation
+  target_column: target_sequence
+  label_column: Label
+
+cache:
+  dataset_type: chembl_ppi

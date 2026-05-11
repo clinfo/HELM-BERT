@@ -1,0 +1,18 @@
+# =============================================================================
+# ChEMBL PPI - Random Split
+# =============================================================================
+# Usage: python scripts/train_ppi.py --config configs/ppi_chembl_random.yaml
+
+training:
+  max_epochs: 50
+
+data:
+  split_name: chembl_random
+  train_file: ./data/downstream/chembl_ppi_random_train.csv
+  test_file: ./data/downstream/chembl_ppi_random_test.csv
+  drug_column: helm_notation
+  target_column: target_sequence
+  label_column: Label
+
+cache:
+  dataset_type: chembl_ppi

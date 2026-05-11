@@ -192,6 +192,13 @@ cython_debug/
 /checkpoints/
 /results/
 /wandb/
+/tools/
+
+# Preprocessing scratch (timestamped backups)
+scripts/preprocessing.bak.*/
+
+# HELM_datasets workspace (absorbed into local_data/ + scripts/preprocessing/)
+/HELM_datasets/
 
 # Model checkpoints and weights
 *.ckpt
@@ -210,6 +217,7 @@ uv.lock
 
 jobs/
 .python-version
+scripts/*.sh
 cache/
 scripts/data/
 /backups/
@@ -217,6 +225,10 @@ scripts/data/
 /hf_upload
 /UPLOAD.md
 /data/embeddings/
+
+# Separate experiment (not tracked in this repo)
+/configs/permeability_pampa_random_3903_3905.yaml
+/data/downstream/cycpeptmpdb_permeability_pampa_random_3903_3905_*.csv
 
 # Ignore all hidden files and directories (except .gitignore)
 .*

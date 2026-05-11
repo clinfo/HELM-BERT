@@ -27,7 +27,7 @@ from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf
 from transformers import AutoTokenizer
 
-from scripts.training_utils import (
+from scripts.helpers.training import (
     SEPARATOR_LINE,
     config_to_checkpoint_config,
     config_to_display_config,
@@ -71,7 +71,8 @@ def main():
 
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"ppi_{config.data.split_name}_{get_model_tag(config)}_{timestamp}"
+    tag = f"_{config.logging.run_tag}" if config.logging.run_tag else ""
+    run_name = f"ppi_{config.data.split_name}_{get_model_tag(config)}{tag}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     # Setup logging

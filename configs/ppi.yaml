@@ -14,7 +14,7 @@
 paths:
   output_dir: ./outputs/ppi
   results_dir: ./results/ppi
-  cache_dir: ./data/embeddings
+  cache_dir: ./local_data/embeddings
 
 # =============================================================================
 # Model
@@ -90,7 +90,7 @@ batch_keys:
 cache:
   drug_encoder_name: helmbert
   target_encoder_name: esm2_650m
-  dataset_type: ppi
+  dataset_type: propedia_ppi
 
 # =============================================================================
 # Classification Settings

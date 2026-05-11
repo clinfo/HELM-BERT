@@ -24,12 +24,13 @@ import lightning as L
 from lightning.pytorch.loggers import WandbLogger
 from transformers import AutoConfig, AutoTokenizer
 
-from scripts.training_utils import (
+from scripts.helpers.training import (
     SEPARATOR_LINE,
     config_to_checkpoint_config,
     config_to_display_config,
     create_callbacks,
     create_output_dirs,
+
     load_config,
     log_completion,
     log_header,
@@ -40,6 +41,7 @@ from scripts.training_utils import (
     setup_training_env,
     to_dict,
 )
+from scripts.helpers.mlm_checkpoint import export_checkpoint
 from src.datamodules import MLMDataModule, MLMDataConfig
 from src.datamodules.mlm_datamodule import DatasetInfo
 from src.models.mlm_lightning import HELMBertMLMLightning, MLMTrainingConfig
@@ -62,7 +64,7 @@ def main():
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     mode_str = "scratch" if config.model.from_scratch else "continue"
-    run_name = f"mlm_{mode_str}_{timestamp}"
+    run_name = f"mlm_{mode_str}_{config.paths.hf_checkpoint_name}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     # Setup logging
@@ -106,6 +108,8 @@ def main():
         model_config.num_attention_heads = arch.num_attention_heads
         model_config.intermediate_size = arch.intermediate_size
         model_config.max_position_embeddings = arch.max_position_embeddings
+        model_config.hidden_dropout_prob = arch.hidden_dropout_prob
+        model_config.attention_probs_dropout_prob = arch.attention_probs_dropout_prob
 
     # Save configurations
     config_path_out = output_dir / "config.json"
@@ -179,7 +183,7 @@ def main():
         name=run_name,
         save_dir=output_dir,
         config=config_dict,
-        tags=["mlm", "pretrain", mode_str] + (config.logging.tags or []),
+        tags=["mlm", "pretrain", mode_str, "helmbert-base"] + (config.logging.tags or []),
     )
 
     # Create trainer
@@ -202,15 +206,16 @@ def main():
 
     training_duration = time.time() - start_time
 
-    # Use final model (WSD: stable phase explores, decay phase settles)
-    logger.info("Using final model after WSD decay phase")
+    checkpoint_callback = trainer.checkpoint_callback
+    best_model_path = getattr(checkpoint_callback, "best_model_path", "")
+    if checkpoint_callback is None or not best_model_path:
+        raise RuntimeError("No best checkpoint found after MLM training")
 
-    # Save model in HuggingFace format
+    best_ckpt = Path(best_model_path)
+    if not best_ckpt.exists():
+        raise RuntimeError("Best checkpoint path does not exist after MLM training")
     hf_checkpoint_dir = Path(config.paths.checkpoint_dir) / config.paths.hf_checkpoint_name
-    hf_checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(hf_checkpoint_dir))
-    tokenizer.save_pretrained(str(hf_checkpoint_dir))
-    logger.info(f"Model saved in HuggingFace format to {hf_checkpoint_dir}")
+    export_checkpoint(best_ckpt, hf_checkpoint_dir, tokenizer, logger)
 
     # Log summary and complete
     log_summary(logger, training_duration, output_dir, huggingface_checkpoint=hf_checkpoint_dir)
