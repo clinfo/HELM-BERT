@@ -68,13 +68,6 @@ DATASETS = {
             "test": DEFAULT_DATA_DIR / "chembl_ppi_family_test.csv",
         },
     },
-    "cold": {
-        "title": "Cold Split",
-        "files": {
-            "train": DEFAULT_DATA_DIR / "chembl_ppi_cold_train.csv",
-            "test": DEFAULT_DATA_DIR / "chembl_ppi_cold_test.csv",
-        },
-    },
 }
 
 LOG_LEVEL = logging.INFO

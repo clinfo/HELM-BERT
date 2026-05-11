@@ -68,7 +68,6 @@ DOWNSTREAM_DIR: Path = DATA_DIR / "downstream"
 # by training directly. Kept under local_data/processed/ so they share the
 # ephemeral / regenerable life-cycle of the rest of the pipeline state.
 SIGNATURES_DIR: Path = PROCESSED_DIR / "signatures_acsm_all"
-MASTER_COMPOUNDS_PATH: Path = FINAL_DIR / "master_compounds.csv"
 
 
 def ensure_dirs() -> None:
