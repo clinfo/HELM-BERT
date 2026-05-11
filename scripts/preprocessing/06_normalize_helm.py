@@ -11,8 +11,8 @@ non-canonical connection tokens — i.e. canonicalize_connections was
 actually applied to every row.
 
 Usage:
-    python 07_normalize_helm.py                    # all datasets
-    python 07_normalize_helm.py --datasets cycpept chembl_ppi
+    python 06_normalize_helm.py                    # all datasets
+    python 06_normalize_helm.py --datasets cycpept chembl_ppi
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from typing import Any, cast
 
 import pandas as pd
 
-# Allow direct `python 07_normalize_helm.py` invocation from scripts/
+# Allow direct `python 06_normalize_helm.py` invocation from scripts/
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))

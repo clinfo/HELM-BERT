@@ -15,8 +15,8 @@ Sanity check emitted to the log:
     - count of rows whose stereo center count decreased (must be 0)
 
 Usage:
-    python 08_normalize_smiles.py
-    python 08_normalize_smiles.py --datasets cycpept_permeability_compounds chembl_ppi
+    python 07_normalize_smiles.py
+    python 07_normalize_smiles.py --datasets cycpept_permeability_compounds chembl_ppi
 """
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def normalize_dataset(cfg: DatasetConfig, log) -> dict[str, int]:
     out_path = cfg.stage_path("smiles_normalized")
     if not in_path.exists():
         raise FileNotFoundError(
-            f"[{cfg.key}] missing input {in_path}; run 07_normalize_helm.py first"
+            f"[{cfg.key}] missing input {in_path}; run 06_normalize_helm.py first"
         )
 
     log.info("=" * 70)

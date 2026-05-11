@@ -6,7 +6,7 @@ then splits by cluster to prevent structural data leakage between train/test.
 
 Pipeline:
 1. Load positive pairs with PDB IDs
-2. Load pre-computed aCSM signatures (from 05_data_generate_acsm_signatures.py)
+2. Load pre-computed aCSM signatures (from 10_generate_acsm_signatures.py)
 3. Cluster complexes via K-Means on PCA-reduced signatures
 4. Split clusters into train/test groups
 5. Protein majority pruning (no protein overlap between splits)
@@ -119,7 +119,7 @@ def load_signatures(signature_dir: Path) -> Tuple[Dict[str, np.ndarray], int]:
     if not sig_path.exists():
         raise FileNotFoundError(
             f"Signature file not found: {sig_path}. "
-            "Run 05_data_generate_acsm_signatures.py first."
+            "Run 10_generate_acsm_signatures.py first."
         )
 
     sig_df = pd.read_csv(sig_path, dtype={"pdb_id": "str"})

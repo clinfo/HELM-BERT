@@ -32,8 +32,8 @@ Sanity checks:
     * Group count + drop count + final row count consistent.
 
 Usage:
-    python 09_dedup.py
-    python 09_dedup.py --datasets cycpept_permeability_compounds chembl_ppi
+    python 08_dedup.py
+    python 08_dedup.py --datasets cycpept_permeability_compounds chembl_ppi
 """
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ def dedup_dataset(cfg: DatasetConfig, log) -> dict[str, int]:
     out_path = cfg.stage_path("final")
     if not in_path.exists():
         raise FileNotFoundError(
-            f"[{cfg.key}] missing input {in_path}; run 08_normalize_smiles.py first"
+            f"[{cfg.key}] missing input {in_path}; run 07_normalize_smiles.py first"
         )
 
     log.info("=" * 70)

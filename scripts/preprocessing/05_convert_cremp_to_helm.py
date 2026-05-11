@@ -11,7 +11,7 @@ Monomer IDs aligned to CycPeptMPDB + ChEMBL v36 monomer libraries:
 All sequences are head-to-tail cyclic peptides, connection: 1:R1-N:R2
 
 Usage:
-    python 06_convert_cremp_to_helm.py
+    python 05_convert_cremp_to_helm.py
 """
 
 import argparse
