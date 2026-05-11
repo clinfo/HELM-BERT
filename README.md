@@ -228,6 +228,7 @@ Val 10% from train.
 
 <p align="center"><img src="assets/tsne_chembl_ppi_random_family.png" width="800"></p>
 
+
 ## Paper Checkpoint
 
 The original model from [arXiv:2512.23175](https://arxiv.org/abs/2512.23175) (pre-trained on 3 databases, without CREMP/WSD) is available via:
