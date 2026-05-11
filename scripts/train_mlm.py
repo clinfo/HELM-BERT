@@ -64,7 +64,7 @@ def main():
     # Create output directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     mode_str = "scratch" if config.model.from_scratch else "continue"
-    run_name = f"mlm_{mode_str}_helmbert-base_{timestamp}"
+    run_name = f"mlm_{mode_str}_{config.paths.hf_checkpoint_name}_{timestamp}"
     output_dir, checkpoint_dir = create_output_dirs(Path(config.paths.output_dir), run_name)
 
     # Setup logging

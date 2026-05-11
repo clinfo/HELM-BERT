@@ -226,6 +226,10 @@ scripts/data/
 /UPLOAD.md
 /data/embeddings/
 
+# Separate experiment (not tracked in this repo)
+/configs/permeability_pampa_random_3903_3905.yaml
+/data/downstream/cycpeptmpdb_permeability_pampa_random_3903_3905_*.csv
+
 # Ignore all hidden files and directories (except .gitignore)
 .*
 !.gitignore

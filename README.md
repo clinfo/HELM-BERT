@@ -187,20 +187,20 @@ The `evidence.lambda_coeff` controls the regularization strength between task lo
 
 ## Benchmarks
 
-Metrics are intentionally omitted here (`-`). Train/test counts below reflect the current released split files.
+Train/test counts reflect the current released split files.
 
 ### CycPeptMPDB Permeability
 
 | Split Regime | Target | Train | Test | R² | Pearson | RMSE | MAE |
 |:------------:|:------:|:-----:|:----:|:--:|:-------:|:----:|:---:|
-| Random | Mixed | 6,945 | 772 | - | - | - | - |
-| Random | PAMPA | 6,262 | 696 | - | - | - | - |
-| Random | Caco-2 | 1,126 | 126 | - | - | - | - |
-| Scaffold | Mixed | 6,945 | 772 | - | - | - | - |
-| Scaffold | PAMPA | 6,262 | 696 | - | - | - | - |
-| Scaffold | Caco-2 | 1,127 | 125 | - | - | - | - |
+| Random | Mixed | 6,945 | 772 | 0.658 | 0.817 | 0.471 | 0.300 |
+| Random | PAMPA | 6,262 | 696 | 0.800 | 0.895 | 0.355 | 0.253 |
+| Random | Caco-2 | 1,126 | 126 | 0.747 | 0.866 | 0.388 | 0.289 |
+| Scaffold | Mixed | 6,945 | 772 | 0.502 | 0.723 | 0.450 | 0.324 |
+| Scaffold | PAMPA | 6,262 | 696 | 0.529 | 0.739 | 0.412 | 0.295 |
+| Scaffold | Caco-2 | 1,127 | 125 | 0.637 | 0.874 | 0.405 | 0.334 |
 
-Val 10% from train. Scaffold split by Murcko scaffolds. The figure below shows the representative Mixed random-vs-scaffold view; PAMPA and Caco-2 use the same split regimes and are summarized in the table above.
+Val 10% from train. Scaffold split by Murcko scaffolds.
 
 <p align="center"><img src="assets/tsne_cycpeptmpdb_permeability_mix_random_scaffold.png" width="800"></p>
 
@@ -208,8 +208,8 @@ Val 10% from train. Scaffold split by Murcko scaffolds. The figure below shows t
 
 | Split Regime | Train | Test | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
 |:------------:|:-----:|:----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 80,225 | 20,060 | - | - | - | - | - |
-| aCSM | 90,215 | 9,575 | - | - | - | - | - |
+| Random | 80,225 | 20,060 | 0.968 | 0.901 | 0.847 | 0.808 | 0.906 |
+| aCSM | 90,215 | 9,575 | 0.862 | 0.683 | 0.587 | 0.522 | 0.722 |
 
 Val 10% from train, 1:4 positive:negative ratio.
 - **Random**: random split
@@ -221,11 +221,10 @@ Val 10% from train, 1:4 positive:negative ratio.
 
 | Split Regime | Train | Test | ROC-AUC | PR-AUC | F1 | MCC | Balanced Acc |
 |:------------:|:-----:|:----:|:-------:|:------:|:--:|:---:|:------------:|
-| Random | 46,650 | 5,180 | - | - | - | - | - |
-| Family | 41,465 | 10,365 | - | - | - | - | - |
-| Cold | 41,465 | 10,365 | - | - | - | - | - |
+| Random | 46,650 | 5,180 | 0.992 | 0.975 | 0.948 | 0.936 | 0.969 |
+| Family | 41,465 | 10,365 | 0.786 | 0.449 | 0.267 | 0.222 | 0.570 |
 
-Val 10% from train. The figure below shows the representative Random-vs-Family comparison; the Cold split is summarized in the table above.
+Val 10% from train.
 
 <p align="center"><img src="assets/tsne_chembl_ppi_random_family.png" width="800"></p>
 
