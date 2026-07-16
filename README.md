@@ -231,7 +231,7 @@ Val 10% from train.
 
 ## Paper Checkpoint
 
-The original model from [arXiv:2512.23175](https://arxiv.org/abs/2512.23175) (pre-trained on 3 databases, without CREMP/WSD) is available via:
+The original model from the published paper ([Lee et al., *J. Chem. Inf. Model.* 2026](https://pubs.acs.org/doi/10.1021/acs.jcim.6c00451)) (pre-trained on 3 databases, without CREMP/WSD) is available via:
 
 ```python
 model = AutoModel.from_pretrained("Flansma/helm-bert", revision="paper", trust_remote_code=True)
@@ -242,12 +242,14 @@ model = AutoModel.from_pretrained("Flansma/helm-bert", revision="paper", trust_r
 If you use HELM-BERT in your research, please cite:
 
 ```bibtex
-@article{lee2025helmbert,
-  title={HELM-BERT: A Transformer for Medium-sized Peptide Property Prediction},
-  author={Seungeon Lee and Takuto Koyama and Itsuki Maeda and Shigeyuki Matsumoto and Yasushi Okuno},
-  journal={arXiv preprint arXiv:2512.23175},
-  year={2025},
-  url={https://arxiv.org/abs/2512.23175}
+@article{lee2026helmbert,
+  title={HELM-BERT: Topology-Aware Representations for Chemically Modified Peptides},
+  author={Lee, Seungeon and Koyama, Takuto and Maeda, Itsuki and Matsumoto, Shigeyuki and Okuno, Yasushi},
+  journal={Journal of Chemical Information and Modeling},
+  year={2026},
+  doi={10.1021/acs.jcim.6c00451},
+  publisher={American Chemical Society},
+  url={https://pubs.acs.org/doi/10.1021/acs.jcim.6c00451}
 }
 ```
 
